@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.idea/
+.vscode/
+
+# Local data, models, and experiment artifacts
+data/
+datasets/
+checkpoints/
+outputs/
+logs/
+rollouts/
+wandb/
+*.log
+*.jsonl
+*.parquet
+*.mp4
+*.safetensors
+*.bin
+*.pt
+*.pth
+
