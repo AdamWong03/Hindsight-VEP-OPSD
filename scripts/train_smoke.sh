@@ -43,7 +43,14 @@ export DS_SKIP_CUDA_CHECK="${DS_SKIP_CUDA_CHECK:-1}"
 
 SMOKE_DIR="${SMOKE_DIR:-${OUTPUT_ROOT:-${HOME}/outputs}/hindsight-vep-opsd/smoke-data}"
 SMOKE_SAMPLES="${SMOKE_SAMPLES:-200}"
-mkdir -p "${SMOKE_DIR}"
+case "${SMOKE_DIR}" in
+  /*) ;;
+  *) echo "SMOKE_DIR must be an absolute path, got '${SMOKE_DIR}'" >&2; exit 2 ;;
+esac
+mkdir -p "${SMOKE_DIR}" 2>/dev/null || {
+  echo "cannot create SMOKE_DIR='${SMOKE_DIR}' (see the --output-dir note in train_50k.sh)" >&2
+  exit 2
+}
 
 : "${DATA:?Set --data or DATA to the training manifest (see .env.example)}"
 SOURCE_DATA="${DATA}"

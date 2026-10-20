@@ -63,7 +63,15 @@ NUM_PROCESSES="${NUM_PROCESSES:-2}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 SYSTEM_PROMPT="${SYSTEM_PROMPT:-You are a helpful assistant.}"
 HF_HOME="${HF_HOME:-${CACHE_ROOT:-${HOME}/.cache}/hf_eval}"
-mkdir -p "${EVAL_OUT}" "${HF_HOME}"
+case "${EVAL_OUT}" in
+  /*) ;;
+  *) echo "EVAL_OUT must be an absolute path, got '${EVAL_OUT}'" >&2; exit 2 ;;
+esac
+if ! mkdir -p "${EVAL_OUT}" "${HF_HOME}" 2>/dev/null; then
+  echo "cannot create EVAL_OUT='${EVAL_OUT}' or HF_HOME='${HF_HOME}'" >&2
+  echo "an empty variable in the job command expands to nothing; use a literal path" >&2
+  exit 2
+fi
 
 # ---- evaluation framework ---------------------------------------------------
 if ! python -c "import lmms_eval" >/dev/null 2>&1; then

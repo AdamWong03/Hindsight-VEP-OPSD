@@ -81,7 +81,25 @@ LOG_DIR="${LOG_DIR:-${ROOT}/logs}"
 for path in "${MODEL}/config.json" "${DATA}"; do
   [[ -e "${path}" ]] || { echo "missing: ${path}" >&2; exit 2; }
 done
-mkdir -p "${OUTPUT_DIR}" "${LOG_DIR}"
+
+# A job command is expanded by the submitter's shell, which does not read .env:
+# `--output-dir $OUTPUT_ROOT/...` silently becomes `/...` when OUTPUT_ROOT is
+# unset there. Fail with the reason instead of trying to write to /.
+case "${OUTPUT_DIR}" in
+  /*) ;;
+  *) echo "OUTPUT_DIR must be an absolute path, got '${OUTPUT_DIR}'" >&2; exit 2 ;;
+esac
+if ! mkdir -p "${OUTPUT_DIR}" 2>/dev/null; then
+  cat >&2 <<EOM
+cannot create OUTPUT_DIR='${OUTPUT_DIR}'
+If that path lost a leading directory, a variable in the job command expanded to
+nothing -- the submitting shell does not read .env. Either pass a literal path,
+or omit --output-dir and let .env's OUTPUT_ROOT supply it (currently
+'${OUTPUT_ROOT:-<unset>}').
+EOM
+  exit 2
+fi
+mkdir -p "${LOG_DIR}"
 
 # ---- parallelism -----------------------------------------------------------
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
