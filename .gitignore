@@ -7,6 +7,17 @@ __pycache__/
 .idea/
 .vscode/
 
+# secrets: judge / OpenAI-compatible endpoint credentials
+.env
+.env.*
+!.env.example
+
+# rendered lmms-eval task files (generated from eval_tasks/*.yaml.in)
+eval_tasks/*/*.yaml
+
+# evaluation framework checkout (clone it, see docs/workflow.md)
+lmms-eval/
+
 # Local data, models, and experiment artifacts
 data/
 datasets/

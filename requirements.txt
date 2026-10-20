@@ -1,0 +1,79 @@
+# Hindsight VEP-OPSD runtime dependencies (PyPI side).
+#
+# Floors mirror the Future-L1 50K environment that this code has been run
+# against (torch 2.14 / transformers 4.57 / accelerate 1.15 / deepspeed 0.19 /
+# numpy 2.5), so the two projects share one known-good stack.
+#
+#   micromamba create -n vep -c conda-forge python=3.12 ffmpeg pip -y
+#   uv pip install --python "$(micromamba run -n vep which python)" -r requirements.txt
+#   uv pip install --python "$(micromamba run -n vep which python)" -e .
+#
+# or just: bash scripts/setup_env.sh
+#
+# The benchmark/eval stack (lmms-eval) lives in the vendored lmms-eval/ checkout
+# and is installed editable, so its own relaxed pins resolve against these.
+
+# --- core training stack ----------------------------------------------------
+torch>=2.6,<2.14
+torchvision
+torchaudio
+transformers>=4.57.1,<5
+tokenizers
+accelerate>=1.10
+deepspeed>=0.18
+peft
+
+# --- vision / video input ---------------------------------------------------
+decord>=0.6.0
+av
+opencv-python-headless
+pillow>=10
+qwen-vl-utils>=0.0.14
+einops
+
+# --- data -------------------------------------------------------------------
+numpy>=2
+datasets>=4
+pyarrow
+pandas
+scipy
+scikit-learn
+sentencepiece>=0.2
+tiktoken
+safetensors
+huggingface_hub
+hf_transfer
+filelock
+
+# --- lmms-eval runtime ------------------------------------------------------
+evaluate
+nltk
+openai
+pycocoevalcap
+tqdm-multiprocess
+pytablewriter
+sqlitedict
+sacrebleu
+zstandard
+jsonlines
+loguru
+tenacity>=8.3.0
+httpx>=0.27
+aiohttp
+openpyxl
+pydantic
+protobuf>=5
+tensorboard
+wandb
+
+# --- misc tooling used by scripts/ ------------------------------------------
+matplotlib
+tqdm
+rich
+psutil
+orjson
+pyyaml
+regex
+requests
+jinja2
+packaging

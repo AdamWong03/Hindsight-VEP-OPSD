@@ -1,0 +1,44 @@
+# TwiFF-Bench, observed frames only (student view), Qwen-VL adapter.
+#
+# Rendered by scripts/eval.sh: __TWIFF_BENCH_DIR__ becomes the shard directory.
+# Frames are embedded in the parquet shards, so no video corpus is needed.
+# Metrics come from lmms_eval.tasks.twiffbench.utils (score 0-5 via the judge
+# prompt in that file); scripts/judge_twiff.sh produces the answer-only score
+# used as the primary number.
+dataset_path: parquet
+dataset_kwargs:
+  data_files:
+    test:
+      - __TWIFF_BENCH_DIR__/test-00000-of-00004.parquet
+      - __TWIFF_BENCH_DIR__/test-00001-of-00004.parquet
+      - __TWIFF_BENCH_DIR__/test-00002-of-00004.parquet
+      - __TWIFF_BENCH_DIR__/test-00003-of-00004.parquet
+
+task: twiffbench_future_l1
+test_split: test
+output_type: generate_until
+doc_to_visual: !function utils.twiffbench_doc_to_visual
+doc_to_text: !function utils.twiffbench_doc_to_text
+doc_to_target: "answer"
+
+# Matches the upstream TwiFF-Bench inference setting (max_think_token_n=4096,
+# temperature 0, top_k 1).
+generation_kwargs:
+  max_new_tokens: 4096
+  temperature: 0.0
+  top_p: 1.0
+  num_beams: 1
+  do_sample: false
+
+process_results: !function utils.twiffbench_process_results
+
+lmms_eval_specific_kwargs:
+  default: {}
+
+metric_list:
+  - metric: twiffbench_score
+    aggregation: !function utils.twiffbench_aggregate_results
+    higher_is_better: true
+
+metadata:
+  version: 0.0

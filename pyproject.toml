@@ -9,14 +9,14 @@ description = "Hindsight-guided on-policy self-distillation for video event pred
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "accelerate==1.10.1",
-  "decord==0.6.0",
-  "deepspeed==0.18.2",
-  "numpy==1.26.4",
+  "accelerate>=1.10.1",
+  "decord>=0.6.0",
+  "deepspeed>=0.18.2",
+  "numpy>=2",
   "Pillow>=10.0",
-  "qwen-vl-utils==0.0.14",
-  "torch>=2.6.0",
-  "transformers==4.57.1",
+  "qwen-vl-utils>=0.0.14",
+  "torch>=2.6.0,<2.14",
+  "transformers>=4.57.1,<5",
 ]
 
 [tool.setuptools.packages.find]

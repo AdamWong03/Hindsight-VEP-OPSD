@@ -1,0 +1,19 @@
+# Conda side of the Hindsight VEP-OPSD environment.
+#
+# The heavy stack (torch, transformers, deepspeed, lmms-eval) comes from
+# requirements.txt / the editable installs, which is why this file only pins the
+# interpreter and the ffmpeg/decord tooling. Build the whole thing with:
+#
+#   bash scripts/setup_env.sh
+#
+# or by hand:
+#
+#   micromamba env create -f environment.yml
+#   uv pip install --python "$(micromamba run -n vep which python)" -r requirements.txt
+name: vep
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - ffmpeg>=7
+  - pip
