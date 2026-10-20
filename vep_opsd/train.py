@@ -34,15 +34,26 @@ class DataArguments:
     image_max_pixels: int = 16384 * 32 * 32
 
 
+# Fields of OPSDArguments that control the launch, not the objective.
+EXECUTION_ONLY_OPSD_ARGUMENTS = ("auto_resume",)
+
+
 @dataclass
 class OPSDArguments:
     candidates_per_example: int = 4
     sampling_temperature: float = 0.8
     sampling_top_p: float = 0.95
-    teacher_temperature: float = 0.2
+    teacher_temperature: float = 0.5
     student_temperature: float = 1.0
     minimum_consistency: float = 0.6
     max_new_tokens: int = 512
+    minimum_teacher_spread: float = 0.05
+    max_resample_rounds: int = 1
+    reject_degenerate_candidates: bool = True
+    # Resuming is convenient after a preemption, but it also silently continues
+    # from a checkpoint whose objective already collapsed. Pass --auto_resume
+    # False (with a fresh --output_dir) to start from the base model.
+    auto_resume: bool = True
 
 
 def main():
@@ -73,7 +84,12 @@ def main():
         model.enable_input_require_grads()
         training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
 
-    opsd_config = HindsightOPSDConfig(**asdict(opsd_args))
+    # OPSDArguments carries both algorithm constants and launcher-only switches;
+    # only the former may be handed to the frozen recipe.
+    opsd_values = asdict(opsd_args)
+    for execution_only in EXECUTION_ONLY_OPSD_ARGUMENTS:
+        opsd_values.pop(execution_only, None)
+    opsd_config = HindsightOPSDConfig(**opsd_values)
     opsd_config.validate()
     output_dir = Path(training_args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -100,8 +116,17 @@ def main():
         train_dataset=dataset,
         data_collator=collate_examples,
     )
-    checkpoints = list(output_dir.glob("checkpoint-*"))
-    trainer.train(resume_from_checkpoint=bool(checkpoints))
+    resume_from = None
+    if opsd_args.auto_resume:
+        checkpoints = [
+            path
+            for path in output_dir.glob("checkpoint-*")
+            if path.name.removeprefix("checkpoint-").isdigit()
+        ]
+        if checkpoints:
+            resume_from = max(checkpoints, key=lambda path: int(path.name.removeprefix("checkpoint-")))
+            print(f"resuming from {resume_from} (pass --auto_resume False to start over)", flush=True)
+    trainer.train(resume_from_checkpoint=resume_from)
     trainer.save_state()
     trainer.save_model(str(output_dir))
     processor.save_pretrained(str(output_dir))
