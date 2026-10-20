@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # Hindsight VEP-OPSD v1 — 2x A6000 smoke run.
 #
-# Purpose: prove the whole Generate -> Verify -> Distill loop runs end to end on
-# this machine (rollout, verifier scoring, listwise loss, gradient step, JSONL
-# artifacts) before spending cluster time. It is NOT a result: 8B full-parameter
-# training does not fit on 2x48G, so ZeRO-2 + offload is used and the run is
-# limited to a handful of optimizer steps.
+# Small end-to-end Generate -> Privileged Teacher -> Token Distill run.
 #
 #   bash scripts/train_smoke.sh
 #   bash scripts/train_smoke.sh --max-steps 4 --max-new-tokens 64

@@ -5,9 +5,7 @@ Catches the failures that would otherwise kill a cluster job minutes in:
 
 1. every module the training entry point imports actually imports;
 2. the checkpoint is a Qwen3-VL directory the trainer accepts;
-3. ``resolve_yes_no_tokens`` finds one-token Yes/No at the real verifier
-   scoring boundary (this is checked at the first verifier call otherwise);
-4. one manifest sample decodes: observed/future frame indices are ordered and
+3. one manifest sample decodes: observed/future frame indices are ordered and
    inside the 1..8 pool, the question survives cleaning, and decord can read
    both frame sets.
 
@@ -44,26 +42,6 @@ def check_config(model: str) -> None:
     print(f"ok  config ({config.model_type}, hidden={getattr(config, 'hidden_size', '?')})")
 
 
-def check_yes_no_tokens(model: str, image_pixels: int) -> None:
-    from PIL import Image
-    from transformers import AutoProcessor
-
-    from vep_opsd.objective import resolve_yes_no_tokens
-    from vep_opsd.prompts import verifier_messages
-
-    processor = AutoProcessor.from_pretrained(
-        model, min_pixels=2 * 32 * 32, max_pixels=16384 * 32 * 32
-    )
-    frame = Image.new("RGB", (image_pixels, image_pixels), (0, 0, 0))
-    messages = verifier_messages([frame] * 4, [frame] * 4, "What happens next?", "<answer>test</answer>")
-    rendered = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    spec = resolve_yes_no_tokens(processor.tokenizer, rendered)
-    print(
-        "ok  verifier Yes/No tokens "
-        f"(yes={spec.yes_text!r}->{spec.yes_id}, no={spec.no_text!r}->{spec.no_id})"
-    )
-
-
 def check_manifest(model: str, data: str, video_root: str | None, limit: int, sample_id: str | None) -> None:
     from vep_opsd.data import VEP50KDataset
 
@@ -94,12 +72,10 @@ def main() -> None:
     parser.add_argument("--video-root", default=None, help="root for relative manifest video paths")
     parser.add_argument("--limit", type=int, default=3, help="manifest samples to decode (default 3)")
     parser.add_argument("--sample-id", default=None, help="check one specific sample id")
-    parser.add_argument("--image-pixels", type=int, default=64, help="synthetic frame size for the token check")
     args = parser.parse_args()
 
     check_imports()
     check_config(args.model)
-    check_yes_no_tokens(args.model, args.image_pixels)
     check_manifest(args.model, args.data, args.video_root, args.limit, args.sample_id)
     print("\npreflight OK")
 

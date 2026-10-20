@@ -1,6 +1,5 @@
-"""Hindsight VEP-OPSD v1."""
+"""Hindsight-Privileged VEP-OPSD."""
 
-from .config import HindsightOPSDConfig
+from .config import VEPPrivilegedOPSDConfig
 
-__all__ = ["HindsightOPSDConfig"]
-
+__all__ = ["VEPPrivilegedOPSDConfig"]

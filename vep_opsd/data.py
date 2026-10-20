@@ -79,10 +79,13 @@ class VEP50KDataset(Dataset):
         video_path = self._video_path(str(row.get("video", "")))
         if not video_path.is_file():
             raise FileNotFoundError(f"Training video is missing: {video_path}")
+        reference_answer = str(row.get("answer", "")).strip()
+        if not reference_answer:
+            raise ValueError(f"Sample {sample_id} has no reference answer")
         return {
             "sample_id": sample_id,
             "question": question,
-            "reference_answer": str(row.get("answer", "")),
+            "reference_answer": reference_answer,
             "observed_frames": read_frames_by_clip(str(video_path), observed_indices),
             "future_frames": read_frames_by_clip(str(video_path), future_indices),
             "observed_indices": observed_indices,
@@ -93,4 +96,3 @@ class VEP50KDataset(Dataset):
 
 def collate_examples(examples):
     return {"examples": examples}
-

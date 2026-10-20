@@ -4,101 +4,14 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import torch
-import torch.nn.functional as F
 
 
 @dataclass(frozen=True)
-class BinaryTokenSpec:
-    yes_id: int
-    no_id: int
-    yes_text: str
-    no_text: str
+class TopKDistribution:
+    """Teacher-defined support and normalized log probabilities per token."""
 
-    def to_dict(self):
-        return {
-            "yes_id": self.yes_id,
-            "no_id": self.no_id,
-            "yes_text": self.yes_text,
-            "no_text": self.no_text,
-        }
-
-
-def resolve_yes_no_tokens(tokenizer, rendered_verifier_prefix: str) -> BinaryTokenSpec:
-    """Resolve one-token Yes/No continuations at the exact scoring boundary."""
-
-    prefix_ids = tokenizer.encode(rendered_verifier_prefix, add_special_tokens=False)
-    for yes_text, no_text in (("Yes", "No"), (" Yes", " No"), ("\nYes", "\nNo")):
-        yes_full = tokenizer.encode(rendered_verifier_prefix + yes_text, add_special_tokens=False)
-        no_full = tokenizer.encode(rendered_verifier_prefix + no_text, add_special_tokens=False)
-        if (
-            yes_full[: len(prefix_ids)] == prefix_ids
-            and no_full[: len(prefix_ids)] == prefix_ids
-            and len(yes_full) == len(prefix_ids) + 1
-            and len(no_full) == len(prefix_ids) + 1
-            and yes_full[-1] != no_full[-1]
-        ):
-            return BinaryTokenSpec(yes_full[-1], no_full[-1], yes_text, no_text)
-    raise ValueError(
-        "The active tokenizer does not provide one-token Yes/No continuations at "
-        "the verifier scoring boundary"
-    )
-
-
-def binary_yes_probability(next_token_logits: torch.Tensor, spec: BinaryTokenSpec) -> torch.Tensor:
-    if next_token_logits.ndim != 2:
-        raise ValueError("next_token_logits must have shape [batch, vocab]")
-    pair = next_token_logits[:, [spec.yes_id, spec.no_id]].float()
-    return F.softmax(pair, dim=-1)[:, 0]
-
-
-def teacher_preference(
-    consistency_scores: torch.Tensor,
-    temperature: float,
-    minimum_consistency: float,
-) -> tuple[torch.Tensor, bool]:
-    if consistency_scores.shape != (4,):
-        raise ValueError("VEP-OPSD v1 requires exactly four candidate scores")
-    if not torch.isfinite(consistency_scores).all():
-        raise ValueError("Teacher consistency scores must be finite")
-    if (consistency_scores < 0).any() or (consistency_scores > 1).any():
-        raise ValueError("Teacher consistency scores must be probabilities")
-    skipped = bool((consistency_scores < minimum_consistency).all().item())
-    preference = F.softmax(consistency_scores.float() / temperature, dim=0).detach()
-    return preference, skipped
-
-
-def length_normalized_log_probability(
-    logits: torch.Tensor,
-    prompt_length: int,
-    generated_ids: torch.Tensor,
-) -> torch.Tensor:
-    """Mean log probability of generated tokens only."""
-
-    if logits.ndim != 3 or logits.shape[0] != 1:
-        raise ValueError("logits must have shape [1, sequence, vocab]")
-    if generated_ids.ndim != 1 or generated_ids.numel() == 0:
-        raise ValueError("generated_ids must be a non-empty 1D tensor")
-    end = prompt_length + generated_ids.numel() - 1
-    token_logits = logits[0, prompt_length - 1 : end, :]
-    if token_logits.shape[0] != generated_ids.numel():
-        raise ValueError("Generated-token/logit alignment failed")
-    token_logp = F.log_softmax(token_logits.float(), dim=-1).gather(
-        -1, generated_ids.to(token_logits.device).unsqueeze(-1)
-    ).squeeze(-1)
-    return token_logp.mean()
-
-
-def listwise_cross_entropy(
-    teacher_distribution: torch.Tensor,
-    student_scores: torch.Tensor,
-    student_temperature: float,
-) -> torch.Tensor:
-    if teacher_distribution.shape != (4,) or student_scores.shape != (4,):
-        raise ValueError("VEP-OPSD v1 listwise loss expects four candidates")
-    if teacher_distribution.requires_grad:
-        raise ValueError("Teacher preferences must be detached")
-    log_student = F.log_softmax(student_scores.float() / student_temperature, dim=0)
-    return -(teacher_distribution.to(log_student.device) * log_student).sum()
+    indices: torch.Tensor
+    log_probs: torch.Tensor
 
 
 def truncate_generated_ids(
@@ -116,3 +29,106 @@ def truncate_generated_ids(
         raise ValueError("Student generated an empty trajectory")
     return result
 
+
+def generated_token_logits(logits: torch.Tensor, generated_length: int) -> torch.Tensor:
+    """Select rows that predict generated tokens from a G+1 kept-logit window."""
+
+    if logits.ndim != 3 or logits.shape[0] != 1:
+        raise ValueError("logits must have shape [1, sequence, vocab]")
+    if generated_length <= 0 or logits.shape[1] < generated_length:
+        raise ValueError("invalid generated length for logits")
+    return logits[0, :generated_length, :]
+
+
+def _append_tail_bucket(log_probs: torch.Tensor) -> torch.Tensor:
+    log_mass = torch.logsumexp(log_probs, dim=-1, keepdim=True).clamp(max=-1e-7)
+    log_tail = torch.log(-torch.expm1(log_mass))
+    return torch.cat([log_probs, log_tail], dim=-1)
+
+
+def teacher_topk_distribution(
+    teacher_logits: torch.Tensor,
+    top_k: int,
+    temperature: float,
+    add_tail_bucket: bool,
+) -> TopKDistribution:
+    """Compress detached Teacher logits to Teacher Top-K plus optional tail."""
+
+    if teacher_logits.ndim != 2:
+        raise ValueError("teacher_logits must have shape [tokens, vocab]")
+    if not 1 < top_k <= teacher_logits.shape[-1]:
+        raise ValueError("top_k must be in [2, vocab_size]")
+    scaled = teacher_logits.detach().float() / temperature
+    top_values, top_indices = torch.topk(scaled, k=top_k, dim=-1)
+    log_z = torch.logsumexp(scaled, dim=-1, keepdim=True)
+    log_probs = top_values - log_z
+    if add_tail_bucket and top_k < teacher_logits.shape[-1]:
+        log_probs = _append_tail_bucket(log_probs)
+    else:
+        log_probs = log_probs - torch.logsumexp(log_probs, dim=-1, keepdim=True)
+    return TopKDistribution(indices=top_indices, log_probs=log_probs.detach())
+
+
+def student_distribution_on_teacher_support(
+    student_logits: torch.Tensor,
+    teacher_support: TopKDistribution,
+    temperature: float,
+    add_tail_bucket: bool,
+) -> torch.Tensor:
+    """Project Student onto exactly the support selected by the Teacher."""
+
+    if student_logits.ndim != 2:
+        raise ValueError("student_logits must have shape [tokens, vocab]")
+    if student_logits.shape[0] != teacher_support.indices.shape[0]:
+        raise ValueError("teacher/student token count mismatch")
+    scaled = student_logits.float() / temperature
+    selected = torch.gather(scaled, dim=-1, index=teacher_support.indices)
+    log_z = torch.logsumexp(scaled, dim=-1, keepdim=True)
+    log_probs = selected - log_z
+    if add_tail_bucket and teacher_support.log_probs.shape[-1] == selected.shape[-1] + 1:
+        log_probs = _append_tail_bucket(log_probs)
+    else:
+        log_probs = log_probs - torch.logsumexp(log_probs, dim=-1, keepdim=True)
+    return log_probs
+
+
+def generalized_jsd_from_log_probs(
+    teacher_log_probs: torch.Tensor,
+    student_log_probs: torch.Tensor,
+    beta: float,
+    temperature: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return mean loss and per-token generalized Jensen-Shannon divergence."""
+
+    if teacher_log_probs.shape != student_log_probs.shape:
+        raise ValueError("teacher/student distribution shape mismatch")
+    if teacher_log_probs.ndim != 2:
+        raise ValueError("log probabilities must have shape [tokens, support]")
+    if not 0 < beta < 1:
+        raise ValueError("beta must be strictly between zero and one")
+    teacher_log_probs = teacher_log_probs.to(student_log_probs.device)
+    beta_tensor = torch.tensor(beta, device=student_log_probs.device, dtype=student_log_probs.dtype)
+    mixture = torch.logsumexp(
+        torch.stack(
+            [
+                teacher_log_probs + torch.log(beta_tensor),
+                student_log_probs + torch.log1p(-beta_tensor),
+            ]
+        ),
+        dim=0,
+    )
+    teacher_kl = (teacher_log_probs.exp() * (teacher_log_probs - mixture)).sum(-1)
+    student_kl = (student_log_probs.exp() * (student_log_probs - mixture)).sum(-1)
+    per_token = beta_tensor * teacher_kl + (1 - beta_tensor) * student_kl
+    per_token = per_token * (temperature**2)
+    return per_token.mean(), per_token
+
+
+def sampled_token_log_probs(logits: torch.Tensor, token_ids: torch.Tensor) -> torch.Tensor:
+    """Log probability of sampled tokens without materializing full-vocab log-softmax."""
+
+    if logits.ndim != 2 or token_ids.ndim != 1 or logits.shape[0] != token_ids.numel():
+        raise ValueError("sampled token/logit alignment failed")
+    logits = logits.float()
+    selected = logits.gather(-1, token_ids.to(logits.device).unsqueeze(-1)).squeeze(-1)
+    return selected - torch.logsumexp(logits, dim=-1)

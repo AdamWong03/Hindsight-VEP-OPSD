@@ -22,8 +22,7 @@ uniform pool of eight frames used by the compact VEP/TwiFF data:
 - `video` may be absolute. Relative paths are resolved below `VIDEO_ROOT`.
 - `image` must contain observed-frame indices.
 - `reasoning_image` must contain strictly later future-frame indices.
-- The student rollout, gradient recomputation, and formal inference use only
-  `image`. The no-gradient verifier additionally receives `reasoning_image`.
-- `answer` is retained in artifacts for analysis but is not used as a training
-  target by the v1 listwise objective.
-
+- The Student rollout, gradient recomputation, and formal inference use only
+  `image`. The privileged fixed Teacher additionally receives `reasoning_image`.
+- `answer` must be non-empty. It anchors the privileged Teacher semantically;
+  it is not directly teacher-forced into the Student.

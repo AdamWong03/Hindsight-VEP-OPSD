@@ -3,47 +3,45 @@ import unittest
 import torch
 
 from vep_opsd.objective import (
-    BinaryTokenSpec,
-    binary_yes_probability,
-    length_normalized_log_probability,
-    listwise_cross_entropy,
-    teacher_preference,
+    generalized_jsd_from_log_probs,
+    generated_token_logits,
+    student_distribution_on_teacher_support,
+    teacher_topk_distribution,
     truncate_generated_ids,
 )
 
 
 class ObjectiveTest(unittest.TestCase):
-    def test_binary_score_uses_only_yes_no(self):
-        logits = torch.zeros(1, 8)
-        logits[0, 2] = 2.0
-        score = binary_yes_probability(logits, BinaryTokenSpec(2, 5, "Yes", "No"))
-        self.assertAlmostEqual(float(score), 0.880797, places=5)
-
-    def test_low_group_is_skipped(self):
-        preference, skipped = teacher_preference(
-            torch.tensor([0.1, 0.2, 0.3, 0.59]), 0.2, 0.6
+    def test_topk_plus_tail_is_normalized(self):
+        teacher = teacher_topk_distribution(torch.randn(4, 11), 3, 1.0, True)
+        self.assertEqual(teacher.log_probs.shape, (4, 4))
+        self.assertTrue(
+            torch.allclose(
+                teacher.log_probs.exp().sum(-1), torch.ones(4), atol=1e-5
+            )
         )
-        self.assertTrue(skipped)
-        self.assertAlmostEqual(float(preference.sum()), 1.0, places=6)
 
-    def test_length_normalization_excludes_prompt(self):
-        logits = torch.zeros(1, 5, 7)
-        generated = torch.tensor([3, 4])
-        logits[0, 2, 3] = 3.0
-        logits[0, 3, 4] = 3.0
-        score = length_normalized_log_probability(logits, 3, generated)
-        expected = torch.log_softmax(torch.tensor([0.0, 0, 0, 3, 0, 0, 0]), 0)[3]
-        self.assertTrue(torch.allclose(score, expected))
+    def test_jsd_gradient_reaches_student_only(self):
+        teacher_logits = torch.randn(3, 9)
+        target = teacher_topk_distribution(teacher_logits, 4, 1.0, True)
+        student_logits = torch.randn(3, 9, requires_grad=True)
+        student = student_distribution_on_teacher_support(
+            student_logits, target, 1.0, True
+        )
+        loss, per_token = generalized_jsd_from_log_probs(
+            target.log_probs, student, beta=0.5
+        )
+        loss.backward()
+        self.assertEqual(per_token.shape, (3,))
+        self.assertIsNotNone(student_logits.grad)
+        self.assertFalse(target.log_probs.requires_grad)
 
-    def test_listwise_gradient_reaches_student_only(self):
-        teacher = torch.tensor([0.7, 0.1, 0.1, 0.1])
-        student = torch.zeros(4, requires_grad=True)
-        listwise_cross_entropy(teacher, student, 1.0).backward()
-        self.assertIsNotNone(student.grad)
-        self.assertFalse(teacher.requires_grad)
+    def test_generated_rows_exclude_final_unused_row(self):
+        logits = torch.randn(1, 4, 7)
+        self.assertTrue(torch.equal(generated_token_logits(logits, 3), logits[0, :3]))
 
     def test_truncate_keeps_eos(self):
-        self.assertEqual(truncate_generated_ids([4, 5, 2, 0, 0], {2}, 0), [4, 5, 2])
+        self.assertEqual(truncate_generated_ids([4, 5, 2, 0], {2}, 0), [4, 5, 2])
 
 
 if __name__ == "__main__":

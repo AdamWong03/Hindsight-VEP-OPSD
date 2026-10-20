@@ -104,7 +104,7 @@ def main() -> None:
     rows = [
         ("greedy, 1 row", dict(do_sample=False, num_return_sequences=1, max_new_tokens=args.steps)),
         (
-            "sampled, 4 rows (current)",
+            "sampled, 4 rows",
             dict(
                 do_sample=True,
                 temperature=0.8,
@@ -114,7 +114,7 @@ def main() -> None:
             ),
         ),
         (
-            "sampled, 1 row",
+            "sampled, 1 row (current)",
             dict(
                 do_sample=True,
                 temperature=0.8,

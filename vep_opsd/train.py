@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
+from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (
     AutoConfig,
     AutoProcessor,
@@ -14,9 +15,9 @@ from transformers import (
     set_seed,
 )
 
-from .config import HindsightOPSDConfig
+from .config import VEPPrivilegedOPSDConfig
 from .data import VEP50KDataset, collate_examples
-from .trainer import HindsightOPSDTrainer
+from .trainer import VEPPrivilegedOPSDTrainer
 
 
 @dataclass
@@ -24,6 +25,12 @@ class ModelArguments:
     model_name_or_path: str
     attn_implementation: str = "sdpa"
     freeze_vision_tower: bool = True
+    lora_r: int = 64
+    lora_alpha: int = 128
+    lora_dropout: float = 0.0
+    lora_target_modules: str = (
+        "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+    )
 
 
 @dataclass
@@ -40,19 +47,13 @@ EXECUTION_ONLY_OPSD_ARGUMENTS = ("auto_resume",)
 
 @dataclass
 class OPSDArguments:
-    candidates_per_example: int = 4
     sampling_temperature: float = 0.8
     sampling_top_p: float = 0.95
-    teacher_temperature: float = 0.5
-    student_temperature: float = 1.0
-    minimum_consistency: float = 0.6
     max_new_tokens: int = 512
-    minimum_teacher_spread: float = 0.05
-    max_resample_rounds: int = 1
-    reject_degenerate_candidates: bool = True
-    # Resuming is convenient after a preemption, but it also silently continues
-    # from a checkpoint whose objective already collapsed. Pass --auto_resume
-    # False (with a fresh --output_dir) to start from the base model.
+    distillation_top_k: int = 100
+    distillation_temperature: float = 1.0
+    jsd_beta: float = 0.5
+    add_tail_bucket: bool = True
     auto_resume: bool = True
 
 
@@ -62,7 +63,9 @@ def main():
     set_seed(training_args.seed)
     config = AutoConfig.from_pretrained(model_args.model_name_or_path)
     if config.model_type != "qwen3_vl":
-        raise ValueError(f"Hindsight VEP-OPSD v1 requires qwen3_vl, got {config.model_type}")
+        raise ValueError(
+            f"Hindsight-Privileged VEP-OPSD requires qwen3_vl, got {config.model_type}"
+        )
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         model_args.model_name_or_path,
         config=config,
@@ -79,6 +82,30 @@ def main():
     if model_args.freeze_vision_tower:
         for parameter in model.model.visual.parameters():
             parameter.requires_grad_(False)
+    target_modules = [
+        value.strip()
+        for value in model_args.lora_target_modules.split(",")
+        if value.strip()
+    ]
+    if not target_modules:
+        raise ValueError("lora_target_modules cannot be empty")
+    model = get_peft_model(
+        model,
+        LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=model_args.lora_r,
+            lora_alpha=model_args.lora_alpha,
+            lora_dropout=model_args.lora_dropout,
+            target_modules=target_modules,
+            bias="none",
+        ),
+    )
+    # Target names such as q_proj also occur in the vision tower. Keep all
+    # visual parameters fixed: the Student learns only its language adapter.
+    if model_args.freeze_vision_tower:
+        for name, parameter in model.named_parameters():
+            if "visual" in name:
+                parameter.requires_grad_(False)
     model.config.use_cache = False
     if training_args.gradient_checkpointing:
         model.enable_input_require_grads()
@@ -89,14 +116,14 @@ def main():
     opsd_values = asdict(opsd_args)
     for execution_only in EXECUTION_ONLY_OPSD_ARGUMENTS:
         opsd_values.pop(execution_only, None)
-    opsd_config = HindsightOPSDConfig(**opsd_values)
+    opsd_config = VEPPrivilegedOPSDConfig(**opsd_values)
     opsd_config.validate()
     output_dir = Path(training_args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     with (output_dir / "vep_opsd_config.json").open("w", encoding="utf-8") as handle:
         json.dump(
             {
-                "method": "Hindsight VEP-OPSD v1",
+                "method": "Hindsight-Privileged VEP-OPSD",
                 "model": asdict(model_args),
                 "data": asdict(data_args),
                 "algorithm": opsd_config.to_dict(),
@@ -108,7 +135,7 @@ def main():
         )
 
     dataset = VEP50KDataset(data_args.manifest, data_args.video_root)
-    trainer = HindsightOPSDTrainer(
+    trainer = VEPPrivilegedOPSDTrainer(
         model=model,
         processor=processor,
         opsd_config=opsd_config,
@@ -134,4 +161,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

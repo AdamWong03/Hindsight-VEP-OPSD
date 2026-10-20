@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hindsight VEP-OPSD v1 — 50K full fine-tune.
+# Hindsight-Privileged VEP-OPSD — 50K LoRA training.
 #
 # Configuration is command-line only: no `VAR=value` prefix, no exported env var.
 #
@@ -22,20 +22,17 @@
 #   --run-name NAME            run label [vep-opsd-50k-<basename output dir>]
 #   --nproc-per-node N         torchrun processes [8]
 #   --global-batch-size N      optimizer batch [128]
-#   --per-device-batch-size N  micro batch per rank [4]; all samples of a micro
-#                              batch are generated in one generate() call, which
-#                              amortises the per-token weight read (measured
-#                              8.93 -> 3.95 s per sample on one A6000 at N=4)
+#   --per-device-batch-size N  micro batch per rank [1]
 #   --grad-accum-steps N       override the derived accumulation [derived]
 #   --max-steps N              stop after N optimizer steps [HF default]
 #   --epochs N                 epochs [1]
-#   --lr F                     learning rate [1e-5]
+#   --lr F                     learning rate [2e-5]
 #   --max-new-tokens N         rollout length [512]
-#   --teacher-temperature F    softmax temperature over the four verifier [0.5]
-#                              scores; 0.2 makes the target one-hot
-#   --minimum-teacher-spread F skip groups whose verifier scores differ by less [0.05]
-#   --max-resample-rounds N    resample rounds for candidates that refuse to [1]
-#                              predict; 0 keeps them
+#   --distillation-top-k N     Teacher support size per generated token [100]
+#   --distillation-temperature F  token-distribution temperature [1.0]
+#   --jsd-beta F               Teacher weight in generalized JSD [0.5]
+#   --lora-r N                 Student LoRA rank [64]
+#   --lora-alpha N             Student LoRA alpha [128]
 #   --save-steps N             checkpoint interval [50]
 #   --save-total-limit N       kept checkpoints [3]
 #   --logging-steps N          log interval [1]
@@ -64,7 +61,7 @@ vepopsd_usage() { sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\
 vepopsd_parse_args \
   "model data video-root output-dir log-dir run-name nproc-per-node global-batch-size \
 per-device-batch-size grad-accum-steps max-steps epochs lr max-new-tokens \
-teacher-temperature minimum-teacher-spread max-resample-rounds save-steps \
+distillation-top-k distillation-temperature jsd-beta lora-r lora-alpha save-steps \
 save-total-limit logging-steps dataloader-num-workers grad-check deepspeed-config \
 report-to wandb-mode master-port seed ddp-timeout env-name env-prefix" "$@"
 
@@ -89,11 +86,7 @@ mkdir -p "${OUTPUT_DIR}" "${LOG_DIR}"
 # ---- parallelism -----------------------------------------------------------
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-128}"
-# Micro batching is what makes the rollout cheap: one generate() call decodes
-# the 4 candidates of every sample in the micro batch together, so the 8B
-# weights are read once per decode step for all of them. The global batch (and
-# therefore the optimisation) is unchanged at 128 = 8 ranks x 4 x 4.
-PER_DEVICE_BATCH_SIZE="${PER_DEVICE_BATCH_SIZE:-4}"
+PER_DEVICE_BATCH_SIZE="${PER_DEVICE_BATCH_SIZE:-1}"
 DENOM=$(( NPROC_PER_NODE * PER_DEVICE_BATCH_SIZE ))
 if [[ -n "${GRAD_ACCUM_STEPS:-}" ]]; then
   GRAD_ACCUM="${GRAD_ACCUM_STEPS}"
@@ -159,7 +152,7 @@ torchrun \
   --gradient_accumulation_steps "${GRAD_ACCUM}" \
   ${MAX_STEPS:+--max_steps "${MAX_STEPS}"} \
   --num_train_epochs "${EPOCHS:-1}" \
-  --learning_rate "${LR:-1e-5}" \
+  --learning_rate "${LR:-2e-5}" \
   --weight_decay 0.1 \
   --warmup_ratio 0.1 \
   --lr_scheduler_type cosine \
@@ -174,14 +167,14 @@ torchrun \
   --report_to "${REPORT_TO:-none}" \
   --seed "${SEED:-42}" \
   --ddp_timeout "${DDP_TIMEOUT:-1800}" \
-  --candidates_per_example 4 \
   --sampling_temperature 0.8 \
   --sampling_top_p 0.95 \
-  --teacher_temperature "${TEACHER_TEMPERATURE:-0.5}" \
-  --student_temperature 1.0 \
-  --minimum_consistency 0.6 \
   --max_new_tokens "${MAX_NEW_TOKENS:-512}" \
-  ${MINIMUM_TEACHER_SPREAD:+--minimum_teacher_spread "${MINIMUM_TEACHER_SPREAD}"} \
-  ${MAX_RESAMPLE_ROUNDS:+--max_resample_rounds "${MAX_RESAMPLE_ROUNDS}"} \
+  --distillation_top_k "${DISTILLATION_TOP_K:-100}" \
+  --distillation_temperature "${DISTILLATION_TEMPERATURE:-1.0}" \
+  --jsd_beta "${JSD_BETA:-0.5}" \
+  --add_tail_bucket True \
+  --lora_r "${LORA_R:-64}" \
+  --lora_alpha "${LORA_ALPHA:-128}" \
   ${VEPOPSD_PASSTHROUGH[@]+"${VEPOPSD_PASSTHROUGH[@]}"} \
   2>&1 | tee "${LOG_DIR}/${RUN_NAME}-${TIMESTAMP}.log"

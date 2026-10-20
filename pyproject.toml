@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hindsight-vep-opsd"
-version = "0.1.0"
-description = "Hindsight-guided on-policy self-distillation for video event prediction"
+version = "0.2.0"
+description = "Hindsight-privileged on-policy self-distillation for video event prediction"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -13,6 +13,7 @@ dependencies = [
   "decord>=0.6.0",
   "deepspeed>=0.18.2",
   "numpy>=2",
+  "peft>=0.17",
   "Pillow>=10.0",
   "qwen-vl-utils>=0.0.14",
   "torch>=2.6.0,<2.14",
@@ -21,4 +22,3 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["vep_opsd*"]
-
