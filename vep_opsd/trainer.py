@@ -93,6 +93,42 @@ def _fixed_base_teacher(model):
             yield
 
 
+def drop_empty_param_groups(optimizer) -> int:
+    """Remove parameter groups that hold no tensor; returns how many were dropped.
+
+    HF splits the trainable parameters into a weight-decay group and a no-decay
+    group (biases, norms). A LoRA student has no such parameters, so the second
+    group is empty, and DeepSpeed's ZeRO-2 replaces the optimizer with a wrapper
+    that exposes only groups containing parameters.
+    """
+    kept = [group for group in optimizer.param_groups if len(group["params"]) > 0]
+    dropped = len(optimizer.param_groups) - len(kept)
+    if dropped:
+        optimizer.param_groups = kept
+    return dropped
+
+
+def sync_scheduler_lambdas(scheduler, optimizer) -> bool:
+    """Make the LR scheduler's lambda list match the optimizer's group count.
+
+    ``torch.optim.lr_scheduler`` builds one lambda per group when the scheduler is
+    created and, since torch 2.9, asserts that the count still matches at every
+    ``step()`` (``zip(..., strict=True)``; older versions silently truncated).
+    HF builds the scheduler before DeepSpeed wraps the optimizer, and the wrapper
+    can expose fewer groups, so the counts diverge after preparation. HF's
+    schedules use one and the same factor per group, so replicating the first
+    lambda for every live group is exactly equivalent.
+    """
+    lambdas = getattr(scheduler, "lr_lambdas", None)
+    if not lambdas:
+        return False
+    groups = len(optimizer.param_groups)
+    if groups == 0 or len(lambdas) == groups:
+        return False
+    scheduler.lr_lambdas = [lambdas[0]] * groups
+    return True
+
+
 class VEPPrivilegedOPSDTrainer(Trainer):
     """On-policy token distillation from a future-and-Gold privileged Teacher."""
 
@@ -107,6 +143,29 @@ class VEPPrivilegedOPSDTrainer(Trainer):
 
     def _base_model(self, model):
         return self.accelerator.unwrap_model(model)
+
+    def create_optimizer(self):
+        optimizer = super().create_optimizer()
+        dropped = drop_empty_param_groups(optimizer)
+        if dropped:
+            print(
+                f"dropped {dropped} empty parameter group(s) before building the LR "
+                "scheduler (a LoRA student has no no-decay parameters)",
+                flush=True,
+            )
+        return optimizer
+
+    def _sync_scheduler(self):
+        scheduler = getattr(self, "lr_scheduler", None)
+        optimizer = getattr(self, "optimizer", None)
+        if scheduler is None or optimizer is None:
+            return
+        if sync_scheduler_lambdas(scheduler, optimizer):
+            print(
+                "aligned the LR scheduler with the optimizer's parameter groups "
+                f"({len(scheduler.lr_lambdas)} group(s))",
+                flush=True,
+            )
 
     def _generate(self, base_model, examples):
         """Sample one current-policy trajectory per example from past frames only."""
@@ -229,6 +288,7 @@ class VEPPrivilegedOPSDTrainer(Trainer):
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
         del num_items_in_batch
+        self._sync_scheduler()
         examples = inputs.get("examples")
         if not examples:
             raise ValueError("VEP-OPSD batch contains no examples")
