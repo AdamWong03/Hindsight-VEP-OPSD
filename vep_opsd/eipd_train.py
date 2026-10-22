@@ -28,24 +28,31 @@ from .eipd_replay import replay_with_latents, answer_prediction_rows
 
 class ManifestDataset(Dataset):
     def __init__(self, manifest: str):
+        self.root = Path(manifest).expanduser().resolve().parent
         self.rows = [json.loads(x) for x in Path(manifest).read_text(encoding="utf-8").splitlines() if x.strip()]
         if not self.rows:
-            raise ValueError("Empty EIPD manifest")
-    def __len__(self):
-        return len(self.rows)
-    def __getitem__(self, i):
-        import decord
+            raise ValueError("Empty EIPD    def __getitem__(self, i):
         from PIL import Image
-        row = self.rows[i]
-        reader = decord.VideoReader(row["video_path"], num_threads=1)
-        observed_indices = row["observed_raw_frames"]
-        bridge_index = row["bridge_raw_frame"]
-        target_start = min(row["future_raw_frames"])
-        if not max(observed_indices) < bridge_index < target_start:
-            raise ValueError(f"Sample {row['id']} has invalid bridge temporal order")
-        pixels = reader.get_batch([*observed_indices, bridge_index]).asnumpy()
-        obs = [Image.fromarray(pixels[k]) for k in range(len(observed_indices))]
-        bridge = Image.fromarray(pixels[-1])
+        row = dict(self.rows[i])
+        if not all(k in row for k in ("past_files", "bridge_file", "future_files")):
+            raise ValueError("Requires the finalized EIPD cached-frame manifest")
+        if not max(row["past_native_indices"]) < row["bridge_native_index"] < min(row["future_native_indices"]):
+            raise ValueError("Invalid Bridge chronology")
+        def path(rel):
+            target = (self.root / rel).resolve()
+            if not target.is_relative_to(self.root):
+                raise ValueError("Unsafe cached frame path")
+            if not target.is_file():
+                raise FileNotFoundError(target)
+            return target
+        def rgb(rel):
+            with Image.open(path(rel)) as im:
+                return im.convert("RGB").copy()
+        row["_past_abs"] = [str(path(x)) for x in row["past_files"]]
+        row["_future_abs"] = [str(path(x)) for x in row["future_files"]]
+        return {"row": row, "observed":[rgb(x) for x in row["past_files"]],
+                "bridge":rgb(row["bridge_file"])}
+)
         return {"row": row, "observed": obs, "bridge": bridge}
 
 def collate(items):
@@ -129,12 +136,14 @@ class EIPDTrainer(Trainer):
         # Reuse the official Future-L1 SFT collator and its latent-image supervision.
         if not row.get("sft_response"):
             raise ValueError("EIPD manifest missing original SFT reasoning response")
-        item = {"video": row["video_path"], "image": row["image"],
-                "reasoning_image": row["reasoning_image"], "answer": row["answer"],
-                "conversations": [
-                    {"from": "human", "value": " ".join("frame_" + str(i) + " <image>" for i in row["image"]) +
-                     "\n" + row["question"]},
-                    {"from": "gpt", "value": row["sft_response"]},
+        # Official FutureL1DataCollator reads image-path lists and preserves
+        # original latent supervision; no original MP4 is needed on this host.
+        item = {"image":row["_past_abs"], "reasoning_image":row["_future_abs"],
+                "answer":row["answer"],
+                "conversations":[
+                    {"from":"human", "value":" ".join(
+                        "frame_"+str(i)+" <image>" for i in row["image"])+"\n"+row["question"]},
+                    {"from":"gpt","value":row["sft_response"]},
                 ]}
         batch = self.sft_collator([item])
         if not batch:
@@ -214,10 +223,10 @@ def import_upstream(root: str):
     from src.model.future_l1 import FutureL1_Qwen3VL
     from src.train.monkey_patch_forward import (
         replace_qwen3_with_mixed_modality_forward, replace_qwen3_vl_generation_forward)
-    from src.dataset.twiff_sft_dataset import TwiFFDataCollator
+    from src.dataset.future_l1_dataset import FutureL1DataCollator
     replace_qwen3_with_mixed_modality_forward()
     replace_qwen3_vl_generation_forward()
-    return FutureL1_Qwen3VL, TwiFFDataCollator
+    return FutureL1_Qwen3VL, FutureL1DataCollator
 
 def main():
     ap = argparse.ArgumentParser()

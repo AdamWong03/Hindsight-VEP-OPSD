@@ -1,3 +1,7 @@
+> **Full-scale EIPD-Data-v1:** [Final data guide](docs/eipd-final-data.md).
+> Build 50K train + 5K validation, source-video-grouped and portable PNG caches.
+> EIPD is separate from the legacy Gold+Future OPSD baseline; GPU model verification remains required.
+
 > **Active development: EIPD (Evidence-Increment Predictive Distillation).**
 > See [the frozen method, dataset construction and training contract](docs/eipd-implementation.md).
 > EIPD uses a real intermediate video frame as *limited* privileged evidence,
