@@ -172,6 +172,11 @@ class EIPDTrainer(Trainer):
             raise RuntimeError("Non-finite EIPD training objective")
         if not all(x.requires_grad for x in states.values()):
             raise RuntimeError("Latent states are detached")
+        if distill.active_tokens:
+            checks = torch.autograd.grad(distill.loss, tuple(states.values()),
+                                         retain_graph=True, allow_unused=True)
+            if all(g is None for g in checks):
+                raise RuntimeError("EIPD answer loss has no autograd path into latent states")
         self.log({"sft_loss": float(sft_loss.detach()), "eipd_loss": float(distill.loss.detach()),
                   "bridge_js": float(distill.mean_js), "latent_steps": len(states),
                   "bridge_active_tokens": distill.active_tokens})
@@ -204,7 +209,8 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--lambda-d", type=float, default=0.2)
     ap.add_argument("--alpha", type=float, default=0.5)
-    ap.add_argument("--max-latent-token", type=int, default=32)
+    ap.add_argument("--max-latent-token", type=int, default=None,
+                    help="Optional assertion of the SFT checkpoint's latent budget; does not override it")
     ap.add_argument("--image-max-pixels", type=int, default=128 * 32 * 32)
     ap.add_argument("--lora-r", type=int, default=64)
     ap.add_argument("--lora-alpha", type=int, default=128)
@@ -230,7 +236,12 @@ def main():
         setattr(model.config, key, actual_id)
     if model.get_input_embeddings().weight.shape[0] < len(processor.tokenizer):
         raise ValueError("Model embeddings do not include checkpoint's latent tokens")
-    model.config.max_latent_token = args.max_latent_token
+    trained_budget = getattr(model.config, "max_latent_token", None)
+    if trained_budget is None:
+        raise ValueError("Checkpoint lacks max_latent_token; use a trained Future-L1 checkpoint")
+    if args.max_latent_token is not None and args.max_latent_token != int(trained_budget):
+        raise ValueError("Do not override checkpoint latent budget when comparing EIPD")
+    trained_budget = int(trained_budget)
     model.config.latent_loss = "mse"
     model.config.latent_lambda = float(getattr(model.config, "latent_lambda", 0.1) or 0.1)
     model.config.use_cache = False
@@ -242,7 +253,7 @@ def main():
     for name, param in model.named_parameters():
         if "visual" in name:
             param.requires_grad_(False)
-    data_options = SimpleNamespace(max_latent_token=args.max_latent_token,
+    data_options = SimpleNamespace(max_latent_token=trained_budget,
                        image_max_pixels=args.image_max_pixels, image_min_pixels=2 * 32 * 32,
                        shuffle_latent_images=False, random_seed=args.seed,
                        merge_latent_segments=False, fixed_latent_budget=None,
