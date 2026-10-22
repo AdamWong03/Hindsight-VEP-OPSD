@@ -138,25 +138,34 @@ class EIPDTrainer(Trainer):
         device = next(model.parameters()).device
         prompt = encode_prompt(self.processor, inputs["observed"], row["question"], device)
         token = self.processor.tokenizer
-        with torch.no_grad():
-            was_training = model.training
-            model.eval()
-            generated = model.generate(**prompt, do_sample=True, temperature=0.8, top_p=0.95,
-                                       max_new_tokens=self.max_new_tokens, use_cache=True,
-                                       pad_token_id=token.pad_token_id)
-            model.train(was_training)
+        bare_model = self.accelerator.unwrap_model(model)
+        was_training = bare_model.training
+        bare_model.eval()
+        try:
+            with torch.no_grad():
+                generated = bare_model.generate(
+                    **prompt, do_sample=True, temperature=0.8, top_p=0.95,
+                    max_new_tokens=self.max_new_tokens, use_cache=True,
+                    pad_token_id=token.pad_token_id)
+        finally:
+            bare_model.train(was_training)
         sampled_ids = generated[0, prompt["input_ids"].shape[1]:].tolist()
-        reasoning_ids = answer_prefix_ids(token, sampled_ids)
-        if model.config.latent_id not in reasoning_ids:
-            raise ValueError("Student generated no continuous latent tokens; cannot claim EIPD latent distillation")
-        # Gold answer never appears in student/teacher user messages or reasoning prefix.
-        gold_ids = token.encode(row["answer"] + "</answer>", add_special_tokens=False)
-        if not 0 < len(gold_ids) <= self.max_answer_tokens:
-            raise ValueError("Invalid or oversized gold answer")
+        # Invalid on-policy output contributes *only* original SFT; do not sneak
+        # ground-truth reasoning into EIPD or silently drop the training row.
+        try:
+            reasoning_ids = answer_prefix_ids(token, sampled_ids)
+            if bare_model.config.latent_id not in reasoning_ids:
+                raise ValueError("No sampled continuous latent positions")
+            gold_ids = token.encode(row["answer"] + "</answer>", add_special_tokens=False)
+            if not 0 < len(gold_ids) <= self.max_answer_tokens:
+                raise ValueError("Missing/oversized supervised answer")
+        except ValueError:
+            sft_loss = self._sft_loss(model, row)
+            self.log({"invalid_eipd_rollout": 1.0, "sft_loss": float(sft_loss.detach())})
+            return (sft_loss, {"loss": sft_loss}) if return_outputs else sft_loss
         reason_tensor = torch.tensor(reasoning_ids, dtype=torch.long, device=device).unsqueeze(0)
         answer_tensor = torch.tensor(gold_ids, dtype=torch.long, device=device).unsqueeze(0)
         cont = torch.cat([reason_tensor, answer_tensor], dim=1)
-        bare_model = self.accelerator.unwrap_model(model)
         with frozen_base_teacher(bare_model):
             p0 = self._teacher_replay(bare_model, inputs, cont, len(gold_ids), bridge=None)
             p1 = self._teacher_replay(bare_model, inputs, cont, len(gold_ids), bridge=inputs["bridge"])
