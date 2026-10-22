@@ -23,6 +23,7 @@ class EIPDTest(unittest.TestCase):
                  question_images_index=[1], reasoning_images_index=[3]))
         self.assertIsNone(validate_meta(row))
         self.assertEqual(row["answer"], "They jump.")
+        self.assertIn("<image>", row["sft_response"])
         self.assertEqual(parse_answer("not a gold answer"), "")
 
     def test_temporal_leakage_guard(self):
@@ -56,7 +57,7 @@ class EIPDTest(unittest.TestCase):
     def test_build_without_using_model_score(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "data.jsonl"
-            line = dict(video="sample.mp4", question="Next?", answer="<ans>run</ans>",
+            line = dict(video="sample.mp4", question="Next?", answer="Frame_5 <rimage> running <ans>run</ans>",
                         question_images_index=[1], reasoning_images_index=[5])
             p.write_text(json.dumps(line) + "\n", encoding="utf-8")
             args = SimpleNamespace(input=str(p), hf_dataset=None, video_root=tmp,

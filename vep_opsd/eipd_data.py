@@ -53,12 +53,17 @@ def normalize_row(row: dict) -> dict:
         turns = row["conversations"]
         if isinstance(turns, list):
             answer = parse_answer(next((x.get("value", "") for x in turns if x.get("from") == "gpt"), ""))
+    # SFT reference is kept separate from all EIPD teacher/student prompts.
+    # Hugging Face TwiFF uses <rimage>; official Future-L1 collator uses <image>.
+    sft_response = re.sub(r"<(?:ans|answer)>.*?</(?:ans|answer)>", "", str(raw_answer),
+                          flags=re.I | re.S).strip()
+    sft_response = re.sub(r"<rimage>", "<image>", sft_response, flags=re.I)
     metadata = row.get("meta_data") or {}
     if not isinstance(metadata, dict):
         metadata = {}
     category = str(metadata.get("classification") or row.get("classification") or "Unknown").strip()
     return dict(video=video, image=obs, reasoning_image=future, question=question,
-                answer=answer, category=category)
+                answer=answer, category=category, sft_response=sft_response)
 
 def validate_meta(rec: dict) -> str | None:
     if not rec["video"] or Path(rec["video"]).name != rec["video"]:
@@ -67,6 +72,8 @@ def validate_meta(rec: dict) -> str | None:
         return "missing_question"
     if not rec["answer"]:
         return "missing_grounded_answer_tag"
+    if rec["sft_response"].count("<image>") != len(rec["reasoning_image"]):
+        return "sft_visual_alignment_failure"
     a, b = rec["image"], rec["reasoning_image"]
     if not a or not b:
         return "missing_temporal_indices"

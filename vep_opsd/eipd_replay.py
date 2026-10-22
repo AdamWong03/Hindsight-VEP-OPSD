@@ -30,7 +30,8 @@ def _prefix_kwargs(encoded: dict, ids: torch.Tensor, prompt_length: int,
     return result
 
 def replay_with_latents(model, encoded_prompt: dict, continuation_ids: torch.Tensor,
-                        latent_id: int, *, require_latents: bool = True):
+                        latent_id: int, *, require_latents: bool = True,
+                        answer_tokens: int | None = None):
     """Recompute model-specific continuous states; gradients flow into trainable layers.
 
     Requires Future-L1 monkey patches, including lvr_mask, lvr_states,
@@ -60,18 +61,23 @@ def replay_with_latents(model, encoded_prompt: dict, continuation_ids: torch.Ten
             raise RuntimeError("Latent recurrence unexpectedly detached from autograd")
         states[position] = state[0]
     final_kwargs = _prefix_kwargs(encoded_prompt, ids, prefix_len, states)
-    final_kwargs["logits_to_keep"] = 0
+    # Only answer prediction rows + one unused final row are needed.
+    final_kwargs["logits_to_keep"] = answer_tokens + 1 if answer_tokens is not None else 0
     outputs = model(**final_kwargs)
     logits = outputs.logits
-    if logits.shape[1] != ids.shape[1]:
-        raise RuntimeError("Model returned truncated logits, cannot align answer tokens")
+    expected = answer_tokens + 1 if answer_tokens is not None else ids.shape[1]
+    if logits.shape[1] != expected:
+        raise RuntimeError(f"Model returned {logits.shape[1]} logits, expected {expected}")
     return logits, states
 
 def answer_prediction_rows(logits: torch.Tensor, prompt_tokens: int, reasoning_tokens: int,
                            answer_tokens: int) -> torch.Tensor:
     """Return [T,V] where row j predicts answer token j under causal shift."""
     start = prompt_tokens + reasoning_tokens
-    selected = logits[0, start - 1:start - 1 + answer_tokens, :]
+    if logits.shape[1] == answer_tokens + 1:
+        selected = logits[0, :answer_tokens, :]
+    else:
+        selected = logits[0, start - 1:start - 1 + answer_tokens, :]
     if selected.shape[0] != answer_tokens:
         raise ValueError("Answer logit alignment failed")
     return selected

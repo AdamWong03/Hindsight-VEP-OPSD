@@ -39,11 +39,24 @@ def eipd_loss(student_logits: torch.Tensor,
         if d.sum() <= eps:
             weights = torch.zeros_like(d)
         else:
-            # Bounded weighting. Re-normalize after the cap; the mean is 1
-            # for active samples (unless zero-divergence tokens dominate).
-            weights = d * (d.numel() / d.sum())
-            weights = weights.clamp(max=max_weight)
-            weights = weights * (d.numel() / weights.sum().clamp_min(eps))
+            # Capped proportional allocation. If fewer than T/max_weight
+            # positions have nonzero evidence, total mass is necessarily <T;
+            # never violate the cap merely to force average weight to one.
+            remaining = d > eps
+            weights = torch.zeros_like(d)
+            budget = float(d.numel())
+            for _ in range(d.numel()):
+                if not remaining.any() or budget <= eps:
+                    break
+                candidate = d[remaining] * (budget / d[remaining].sum())
+                saturated = candidate >= max_weight
+                if not saturated.any():
+                    weights[remaining] = candidate
+                    break
+                indices = torch.where(remaining)[0]
+                weights[indices[saturated]] = max_weight
+                remaining[indices[saturated]] = False
+                budget -= float(saturated.sum().item()) * max_weight
     log_s = F.log_softmax(student_logits.float(), dim=-1)
     per_token = (q * (q.log() - log_s)).sum(-1)
     loss = (per_token * weights).mean()
