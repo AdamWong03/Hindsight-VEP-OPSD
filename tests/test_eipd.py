@@ -28,7 +28,7 @@ class EIPDTest(unittest.TestCase):
 
     def test_temporal_leakage_guard(self):
         row = dict(video="a.mp4", question="next?", answer="open", image=[4],
-                   reasoning_image=[3])
+                   reasoning_image=[3], sft_response="<image>")
         self.assertEqual(validate_meta(row), "temporal_order_violation")
 
     def test_objective_different_teacher_has_gradient(self):
