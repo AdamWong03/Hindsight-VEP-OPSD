@@ -1,3 +1,14 @@
+> **Implementation update / production dataset (2026-10-22).**
+> The authoritative final-scale data pipeline is
+> [EIPD-Data-v1](eipd-final-data.md) and scripts/build_eipd_final.sh.
+> This document's earlier eipd_data example is a development prototype and
+> its video_path manifests are NOT accepted by the new cached-image
+> EIPD training entry. The algorithmic EIPD contract below is unchanged.
+> The production training input is EIPD-Data-v1/train.jsonl containing
+> relative past_files, bridge_file, and future_files.
+
+---
+
 # EIPD implementation contract (2026-10)
 
 This is a new independent experiment path. The existing vep_opsd/train.py,
