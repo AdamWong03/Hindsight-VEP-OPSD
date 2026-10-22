@@ -237,7 +237,8 @@ def main():
     ap.add_argument("--alpha", type=float, default=0.5)
     ap.add_argument("--max-latent-token", type=int, default=None,
                     help="Optional assertion of the SFT checkpoint's latent budget; does not override it")
-    ap.add_argument("--image-max-pixels", type=int, default=128 * 32 * 32)
+    ap.add_argument("--image-max-pixels", type=int, default=16384 * 32 * 32,
+                    help="Original Future-L1 image maximum; lower only in separately labeled smoke tests")
     ap.add_argument("--lora-r", type=int, default=64)
     ap.add_argument("--lora-alpha", type=int, default=128)
     args = ap.parse_args()
@@ -250,7 +251,8 @@ def main():
         raise ValueError("EIPD presently supports Future-L1 Qwen3-VL only")
     model = FutureL1Model.from_pretrained(args.model, config=config, torch_dtype=torch.bfloat16,
                                            attn_implementation="sdpa")
-    processor = AutoProcessor.from_pretrained(args.model)
+    processor = AutoProcessor.from_pretrained(
+        args.model, min_pixels=2 * 32 * 32, max_pixels=args.image_max_pixels)
     processor.tokenizer.add_tokens(["<|latent|>", "<|latent_start|>", "<|latent_end|>"],
                                    special_tokens=False)
     for key, literal in [("latent_id", "<|latent|>"), ("latent_start_id", "<|latent_start|>"),
