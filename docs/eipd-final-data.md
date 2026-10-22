@@ -51,7 +51,7 @@ exact source-ID deduplication, not visual content deduplication.
   python -m pip install datasets pyarrow decord pillow numpy
 
   python -m vep_opsd.eipd_final_data plan \
-    --hf-dataset Liu-Junhua/TwiFF-2.7M \
+    --input /data/TwiFF-2.7M-parquet \
     --exclusions /data/exclude_futurel1.txt \
                  /data/exclude_futurebench.txt \
                  /data/exclude_twiffbench.txt \
@@ -62,6 +62,10 @@ candidates.jsonl (4x candidates), and candidate_source_ids.txt.
 Planning is idempotent and uses reproducible SHA256 rankings. Change data
 design only by creating a new version directory. If some task category is
 insufficient, it fails rather than silently changing quotas.
+`--input` accepts one JSON/JSONL/Parquet file or a directory of homogeneous
+shards. Every local shard's path, byte size and SHA256 are frozen in
+plan_config.json. `--hf-dataset Liu-Junhua/TwiFF-2.7M` remains available when
+the immutable Hugging Face revision is preferred.
 
 ## 3. Download the needed videos - without Future-L1's 200+ GB archive
 
@@ -74,8 +78,26 @@ official Panda site) and select original YouTube sources:
     --video-ids /data/EIPD-Data-v1/candidate_source_ids.txt \
     --output-csv /data/EIPD-Data-v1/panda_sources.csv
 
-Run Panda's own video2dataset on that subset CSV with url and timestamp
-columns. Inspect the downloaded MP4 metadata and establish a verified mapping:
+The planner also preserves TwiFF's exact `meta_data.start` and
+`meta_data.end` values. The included restartable downloader uses those source
+timestamps and the original YouTube ID to make exact TwiFF-named clips while
+limiting source resolution to 720p (or the highest lower resolution):
+
+  python -m vep_opsd.eipd_clips \
+    --output /data/EIPD-Data-v1 \
+    --clip-root /data/EIPD-Data-v1/raw_clips \
+    --reserve-factor 1.25 --workers 4 \
+    --reuse-root /data/already_verified_twiff_clips
+
+It records every attempt in download_state.sqlite and
+logs/clip-download.jsonl, validates outputs with ffprobe, and safely resumes.
+An optional `--cookies` file may be supplied when the hosting site requires
+it. A small `--max-tasks` run should be used to verify network access before
+the full acquisition.
+
+Alternatively, run Panda's own video2dataset on the subset CSV with url and
+timestamp columns. Inspect the downloaded MP4 metadata and establish a
+verified mapping:
 
   /data/verified_map.json
 

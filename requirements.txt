@@ -29,6 +29,7 @@ av
 opencv-python-headless
 pillow>=10
 qwen-vl-utils>=0.0.14
+yt-dlp>=2026.10.14
 einops
 
 # --- data -------------------------------------------------------------------

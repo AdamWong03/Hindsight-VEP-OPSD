@@ -24,6 +24,19 @@ case "$stage" in
       --csv "$PANDA_CSV" --video-ids "$EIPD_ROOT/candidate_source_ids.txt" \
       --output-csv "$EIPD_ROOT/panda_sources.csv"
     ;;
+  download)
+    download_args=(
+      --output "$EIPD_ROOT"
+      --clip-root "${VIDEO_ROOT:-$EIPD_ROOT/raw_clips}"
+      --workers "${DOWNLOAD_WORKERS:-4}"
+      --reserve-factor "${DOWNLOAD_RESERVE_FACTOR:-1.25}"
+    )
+    if [[ -n "$YT_COOKIES" ]]; then download_args+=(--cookies "$YT_COOKIES"); fi
+    if [[ -n "$DOWNLOAD_MAX_TASKS" ]]; then download_args+=(--max-tasks "$DOWNLOAD_MAX_TASKS"); fi
+    if [[ -n "$REUSE_VIDEO_ROOT" ]]; then download_args+=(--reuse-root "$REUSE_VIDEO_ROOT"); fi
+    if [[ -n "$YT_REMOTE_EJS" ]]; then download_args+=(--remote-ejs); fi
+    "$py" -m vep_opsd.eipd_clips "${download_args[@]}"
+    ;;
   materialize)
     if [[ -z "$VIDEO_ROOT" ]]; then echo "Set VIDEO_ROOT to verified TwiFF clips" >&2; exit 2; fi
     if [[ -n "$VIDEO_MAP" ]]; then
@@ -42,7 +55,7 @@ case "$stage" in
       --split train --per-stratum 50 --output "$EIPD_ROOT/audit_sheets"
     ;;
   *)
-    echo "Usage: bash scripts/build_eipd_final.sh {plan|panda-subset|materialize|verify|audit}" >&2
+    echo "Usage: bash scripts/build_eipd_final.sh {plan|panda-subset|download|materialize|verify|audit}" >&2
     echo "Env: EIPD_ROOT and stage-specific EXCLUDE_*, PANDA_CSV, VIDEO_ROOT, VIDEO_MAP" >&2
     exit 2
     ;;

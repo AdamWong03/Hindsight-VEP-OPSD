@@ -17,7 +17,7 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-from .eipd_data import iter_input, normalize_row, uniform_pool, validate_meta
+from .eipd_data import input_files, iter_input, normalize_row, uniform_pool, validate_meta
 
 SCHEMA_VERSION = "eipd-data-v1.0"
 CATEGORIES = ("Predictive", "Instructional", "Camera")
@@ -35,6 +35,22 @@ def sha256_file(path: Path) -> str:
         for part in iter(lambda: f.read(2 << 20), b""):
             h.update(part)
     return h.hexdigest()
+
+
+def metadata_fingerprint(path: str) -> tuple[str, list[dict]]:
+    """Stable fingerprint of every local metadata shard and its relative name."""
+
+    source = Path(path).expanduser().resolve()
+    files = input_files(path)
+    entries = []
+    digest = hashlib.sha256()
+    for file in files:
+        relative = str(file.relative_to(source)) if source.is_dir() else file.name
+        item = {"path": relative, "size": file.stat().st_size, "sha256": sha256_file(file)}
+        entries.append(item)
+        digest.update(json.dumps(item, sort_keys=True).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest(), entries
 
 def score(text: str, seed: int) -> str:
     return sha256_bytes(f"{seed}\t{text}".encode("utf-8"))
@@ -123,10 +139,11 @@ def plan(args) -> dict:
         if not hf_revision:
             raise RuntimeError("Cannot establish immutable Hugging Face source revision")
     else:
-        local_sha = sha256_file(Path(args.input))
+        local_sha, local_files = metadata_fingerprint(args.input)
     cfg = {"schema": SCHEMA_VERSION, "seed": args.seed,
            "source": args.hf_dataset or str(Path(args.input).resolve()),
            "source_revision": hf_revision, "source_file_sha256": local_sha,
+           "source_files": None if args.hf_dataset else local_files,
            "exclusions": coverage, "train_quotas": train_quotas,
            "val_quotas": val_quotas, "reserve_multiplier": args.reserve_multiplier}
     _config(root, cfg, "plan_config.json")
@@ -148,7 +165,7 @@ def plan(args) -> dict:
                 if original_question and str(original_question).count("<image>") != len(rec["image"]):
                     errors["observed_placeholder_mismatch"] += 1
                     continue
-                err = validate_meta(rec)
+                err = validate_meta(rec, require_source_time=True)
                 if err:
                     errors[err] += 1
                     continue

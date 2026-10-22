@@ -9,6 +9,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
+from vep_opsd.eipd_clips import load_tasks
 from vep_opsd.eipd_final_data import source_id, _split, plan, extract_frames, sha256_file
 
 
@@ -19,7 +20,11 @@ def example(video):
         "answer": "Frame_4 <rimage> The runner moves. Final Answer: <ans>The runner moves.</ans>",
         "question_images_index": [1],
         "reasoning_images_index": [4],
-        "meta_data": {"classification": "Predictive"},
+        "meta_data": {
+            "classification": "Predictive",
+            "start": "0:00:10.000",
+            "end": "0:00:20.000",
+        },
     }
 
 
@@ -58,6 +63,8 @@ class FinalDataTests(unittest.TestCase):
             self.assertEqual(len(selected), 2)
             self.assertEqual(len({x["source_id"] for x in selected}), 2)
             self.assertTrue((root/"final"/"candidate_source_ids.txt").is_file())
+            self.assertEqual(selected[0]["source_start"], "0:00:10.000")
+            self.assertEqual(selected[0]["source_end"], "0:00:20.000")
 
     def test_lossless_images_and_midpoint_chronology(self):
         class FakeReader:
@@ -82,6 +89,26 @@ class FinalDataTests(unittest.TestCase):
                 self.assertEqual(sha256_file(root/name), digest)
                 with Image.open(root/name) as img:
                     self.assertEqual(img.size, (8,8))
+
+    def test_download_plan_preserves_exact_source_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            quotas = {"Predictive": 1, "Instructional": 0, "Camera": 0}
+            (root / "plan_config.json").write_text(json.dumps({
+                "train_quotas": quotas, "val_quotas": {
+                    "Predictive": 0, "Instructional": 0, "Camera": 0
+                }
+            }))
+            row = {
+                "video": "abcdefghijk_9.mp4", "source_id": "abcdefghijk",
+                "source_start": "0:01:02.500", "source_end": "0:01:09.750",
+                "split": "train", "category": "Predictive", "selection_rank": 0,
+            }
+            (root / "candidates.jsonl").write_text(json.dumps(row) + "\n")
+            task = load_tasks(root, 1.0)[0]
+            self.assertEqual(task.start, 62.5)
+            self.assertEqual(task.end, 69.75)
+            self.assertEqual(task.video, row["video"])
 
 
 if __name__ == "__main__":

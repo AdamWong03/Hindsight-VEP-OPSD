@@ -10,6 +10,22 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterator
 
+
+def input_files(path: str) -> list[Path]:
+    """Resolve a JSON/JSONL/Parquet input without loading it into memory."""
+
+    source = Path(path).expanduser().resolve()
+    if source.is_dir():
+        files = sorted(source.glob("*.parquet"))
+        if not files:
+            files = sorted(source.glob("*.jsonl")) + sorted(source.glob("*.json"))
+        if not files:
+            raise FileNotFoundError(f"No supported metadata files under {source}")
+        return files
+    if source.is_file():
+        return [source]
+    raise FileNotFoundError(source)
+
 def stable_score(key: str, seed: int) -> int:
     return int.from_bytes(hashlib.sha256(f"{seed}:{key}".encode()).digest()[:8], "big")
 
@@ -33,6 +49,22 @@ def parse_answer(raw: str) -> str:
         if found:
             return " ".join(found[-1].split())
     return ""
+
+
+def parse_timestamp(value: str) -> float:
+    parts = str(value or "").strip().split(":")
+    if not 1 <= len(parts) <= 3:
+        raise ValueError("invalid_source_timestamp")
+    try:
+        numbers = [float(part) for part in parts]
+    except ValueError as exc:
+        raise ValueError("invalid_source_timestamp") from exc
+    seconds = 0.0
+    for number in numbers:
+        seconds = seconds * 60.0 + number
+    if seconds < 0:
+        raise ValueError("invalid_source_timestamp")
+    return seconds
 
 def normalize_row(row: dict) -> dict:
     video = str(row.get("video") or row.get("video_path") or "").strip()
@@ -62,16 +94,26 @@ def normalize_row(row: dict) -> dict:
     if not isinstance(metadata, dict):
         metadata = {}
     category = str(metadata.get("classification") or row.get("classification") or "Unknown").strip()
+    source_start = str(metadata.get("start") or row.get("start") or "").strip()
+    source_end = str(metadata.get("end") or row.get("end") or "").strip()
     return dict(video=video, image=obs, reasoning_image=future, question=question,
-                answer=answer, category=category, sft_response=sft_response)
+                answer=answer, category=category, sft_response=sft_response,
+                source_start=source_start, source_end=source_end,
+                source_metadata=metadata)
 
-def validate_meta(rec: dict) -> str | None:
+def validate_meta(rec: dict, require_source_time: bool = False) -> str | None:
     if not rec["video"] or Path(rec["video"]).name != rec["video"]:
         return "unsafe_or_missing_video_id"
     if not rec["question"]:
         return "missing_question"
     if not rec["answer"]:
         return "missing_grounded_answer_tag"
+    if require_source_time:
+        try:
+            if parse_timestamp(rec.get("source_end")) <= parse_timestamp(rec.get("source_start")):
+                return "invalid_source_time_range"
+        except ValueError:
+            return "invalid_source_time_range"
     if rec["sft_response"].count("<image>") != len(rec["reasoning_image"]):
         return "sft_visual_alignment_failure"
     a, b = rec["image"], rec["reasoning_image"]
@@ -88,16 +130,30 @@ def iter_input(path: str, hf_dataset: str | None) -> Iterator[dict]:
         from datasets import load_dataset
         yield from load_dataset(hf_dataset, split="train", streaming=True)
         return
-    with Path(path).open("r", encoding="utf-8") as handle:
-        if path.endswith(".json"):
-            rows = json.load(handle)
-            if isinstance(rows, dict):
-                rows = [rows]
-            yield from rows
-        else:
-            for line in handle:
-                if line.strip():
-                    yield json.loads(line)
+    for file in input_files(path):
+        if file.suffix == ".parquet":
+            import pyarrow.parquet as pq
+
+            parquet = pq.ParquetFile(file)
+            needed = {
+                "video", "video_path", "question", "answer", "question_images_index",
+                "reasoning_images_index", "image", "reasoning_image", "meta_data",
+                "classification", "start", "end", "conversations",
+            }
+            columns = [name for name in parquet.schema_arrow.names if name in needed]
+            for batch in parquet.iter_batches(batch_size=4096, columns=columns):
+                yield from batch.to_pylist()
+            continue
+        with file.open("r", encoding="utf-8") as handle:
+            if file.suffix == ".json":
+                rows = json.load(handle)
+                if isinstance(rows, dict):
+                    rows = [rows]
+                yield from rows
+            else:
+                for line in handle:
+                    if line.strip():
+                        yield json.loads(line)
 
 def resolve_video(video_id: str, video_root: Path, mapping: dict[str, str]) -> Path:
     return Path(mapping[video_id]) if video_id in mapping else video_root / video_id
