@@ -34,7 +34,7 @@ class EIPDTest(unittest.TestCase):
     def test_objective_different_teacher_has_gradient(self):
         s = torch.randn(4, 13, requires_grad=True)
         p0 = torch.randn(4, 13, requires_grad=True)
-        p1 = torch.randn(4, 13, requires_grad=True) + 0.2
+        p1 = (torch.randn(4, 13) + 0.2).requires_grad_()
         result = eipd_loss(s, p0, p1)
         result.loss.backward()
         self.assertTrue(torch.isfinite(s.grad).all())

@@ -212,6 +212,8 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--epochs", type=float, default=1.0)
+    ap.add_argument("--max-steps", type=int, default=-1, help="Use 1 for a checkpoint-backed GPU smoke test")
+    ap.add_argument("--deepspeed", default=None, help="Optional ZeRO-2 configuration JSON for distributed training")
     ap.add_argument("--gradient-accumulation-steps", type=int, default=16)
     ap.add_argument("--max-new-tokens", type=int, default=512)
     ap.add_argument("--max-answer-tokens", type=int, default=128)
@@ -269,6 +271,7 @@ def main():
                        decoder_recon_max_text_len=0)
     sft_collator = UpstreamSFTCollator(processor, data_options)
     train_args = TrainingArguments(output_dir=args.output, num_train_epochs=args.epochs,
+                      max_steps=args.max_steps, deepspeed=args.deepspeed,
                       per_device_train_batch_size=1,
                       gradient_accumulation_steps=args.gradient_accumulation_steps,
                       learning_rate=args.lr, bf16=True, remove_unused_columns=False,

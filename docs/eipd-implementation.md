@@ -63,6 +63,16 @@ Qwen3-VL-compatible Future-L1-SFT checkpoint, not the vanilla Qwen3-VL checkpoin
       --manifest /data/eipd_v1/train.jsonl \
       --output /runs/eipd_v1
 
+A bounded GPU smoke (once videos and a real checkpoint are available):
+    
+    python -m vep_opsd.eipd_train --future-l1-root /repos/Future-L1 \
+      --model /models/future-l1-sft --manifest /data/eipd_v1/train.jsonl \
+      --output /runs/eipd_smoke --max-steps 1 --gradient-accumulation-steps 1
+
+For distributed ZeRO-2, use torchrun with the same arguments plus
+--deepspeed /path/to/zero2.json. Do not assume ZeRO-3 adapter-disabled
+rollout works without an explicit distributed parity/collectives test.
+
 The code uses a deliberately expensive O(latent tokens) full-prefix
 differentiable replay. Do not start 50K 8B training before the following gates:
 
