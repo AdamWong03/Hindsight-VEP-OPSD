@@ -63,7 +63,8 @@ class EIPDTest(unittest.TestCase):
             args = SimpleNamespace(input=str(p), hf_dataset=None, video_root=tmp,
                          video_map=None, output_dir=str(Path(tmp) / "out"),
                          exclude_video_lists=[], categories=[], train_size=1, val_size=1,
-                         oversample=4, val_fraction=0.5, seed=42, strict_counts=False)
+                         oversample=4, val_fraction=0.5, seed=42, strict_counts=False,
+                         allow_no_exclusions=True)
             with patch("vep_opsd.eipd_data.inspect_video", return_value=dict(
                      video_path="x.mp4", observed_raw_frames=[1], future_raw_frames=[9],
                      bridge_raw_frame=5, video_length=10, fps=1)):

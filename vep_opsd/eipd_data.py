@@ -134,6 +134,8 @@ def inspect_video(rec: dict, root: Path, mapping: dict[str, str]) -> dict:
 
 def build(args) -> dict:
     """Select by video ID BEFORE video decoding. Do not score by model gain."""
+    if not args.exclude_video_lists and not getattr(args, "allow_no_exclusions", False):
+        raise ValueError("Explicit benchmark and Future-L1 exclusion lists required; use --allow-no-exclusions only for development")
     root = Path(args.video_root).resolve()
     mapping = json.loads(Path(args.video_map).read_text()) if args.video_map else {}
     exclude = set()
@@ -199,7 +201,10 @@ def build(args) -> dict:
         with (out / (split + ".jsonl")).open("w", encoding="utf-8") as handle:
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-    summary = dict(train=len(train), val=len(val), requested_train=args.train_size,
+    hashes = {split: hashlib.sha256((out / (split + ".jsonl")).read_bytes()).hexdigest()
+              for split in ("train", "val")}
+    summary = dict(train=len(train), val=len(val), manifest_sha256=hashes,
+                   requested_train=args.train_size,
                    requested_val=args.val_size, candidate_capacity=capacity, rejected=dict(rejects),
                    seed=args.seed, selection="stable hash of original video filename",
                    note="Metadata and decoder validation only; semantic correctness and benchmark decontamination require separate audits")
@@ -224,6 +229,8 @@ def cli():
     parser.add_argument("--oversample", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--strict-counts", action="store_true")
+    parser.add_argument("--allow-no-exclusions", action="store_true",
+                        help="Unsafe development-only option; never use for benchmark claims")
     args = parser.parse_args()
     if args.train_size <= 0 or args.val_size <= 0 or not 0 < args.val_fraction < 1 or args.oversample < 1:
         parser.error("Invalid requested sizes/fraction/oversample")

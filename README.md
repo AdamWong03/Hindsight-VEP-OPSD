@@ -1,3 +1,14 @@
+> **Active development: EIPD (Evidence-Increment Predictive Distillation).**
+> See [the frozen method, dataset construction and training contract](docs/eipd-implementation.md).
+> EIPD uses a real intermediate video frame as *limited* privileged evidence,
+> never gold answers in teacher prompts, and differentiable Future-L1 continuous
+> latent replay. New entry points: `python -m vep_opsd.eipd_data` and
+> `python -m vep_opsd.eipd_train`. The sections below document the
+> **legacy full-future + gold OPSD baseline**, retained for reproducibility.
+> The EIPD 8B/GPU end-to-end training path has not yet been certified.
+
+---
+
 # Hindsight-Privileged VEP-OPSD
 
 On-policy self-distillation for open-ended Video Event Prediction with
