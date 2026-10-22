@@ -142,6 +142,21 @@ BEFORE comparing method results; never select examples by model performance.
 Training the full 50K without semantic QA is a structural prototype, not a
 certified high-quality dataset.
 
+
+### Stratified semantic review sheets
+
+After materialize and verify, generate ~450 randomly selected visual audit sheets
+(50 per category x bridge-gap bin, where available):
+
+    python -m vep_opsd.eipd_audit --data-root /data/EIPD-Data-v1 \
+      --split train --output /data/EIPD-Data-v1/audit_sheets \
+      --per-stratum 50
+
+Review the Past, Bridge, and Future frames alongside the question and answer.
+Fill the yes/no fields in review.csv for temporal early-answer leakage, annotation
+correctness, question validity and video alignment. Record class-conditional
+failure rates. Do not claim full semantic certification from structural QA.
+
 ## 7. Train with finalized PNG manifest
 
   python -m vep_opsd.eipd_train \
