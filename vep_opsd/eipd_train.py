@@ -7,8 +7,10 @@ Run a single-GPU gradient/latent parity smoke test before distributed training.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import subprocess
 import re
 import sys
 from contextlib import contextmanager
@@ -20,6 +22,7 @@ from peft import LoraConfig, TaskType, get_peft_model
 from torch.utils.data import Dataset
 from transformers import AutoConfig, AutoProcessor, Trainer, TrainingArguments, set_seed
 
+from .trainer import drop_empty_param_groups, sync_scheduler_lambdas
 from .eipd_objective import eipd_loss
 from .eipd_replay import replay_with_latents, answer_prediction_rows
 
@@ -102,6 +105,17 @@ class EIPDTrainer(Trainer):
         self.sft_collator = sft_collator
         self.max_answer_tokens = max_answer_tokens
 
+    def create_optimizer(self):
+        optimizer = super().create_optimizer()
+        drop_empty_param_groups(optimizer)
+        return optimizer
+
+    def _sync_scheduler(self):
+        scheduler = getattr(self, "lr_scheduler", None)
+        optimizer = getattr(self, "optimizer", None)
+        if scheduler is not None and optimizer is not None:
+            sync_scheduler_lambdas(scheduler, optimizer)
+
     def _teacher_replay(self, model, example, continuation, answer_length, bridge):
         p = encode_prompt(self.processor, example["observed"], example["row"]["question"],
                           next(model.parameters()).device, bridge=bridge)
@@ -134,6 +148,7 @@ class EIPDTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         del num_items_in_batch
+        self._sync_scheduler()
         row = inputs["row"]
         device = next(model.parameters()).device
         prompt = encode_prompt(self.processor, inputs["observed"], row["question"], device)
@@ -280,7 +295,18 @@ def main():
                       gradient_checkpointing=False)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "eipd_config.json").write_text(json.dumps(vars(args), indent=2), encoding="utf-8")
+    def commit_of(path):
+        try:
+            return subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"],
+                                           text=True, stderr=subprocess.DEVNULL).strip()
+        except (OSError, subprocess.CalledProcessError):
+            return "unknown"
+    manifest_sha256 = hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest()
+    config_record = dict(vars(args), source_git_commit=commit_of(args.future_l1_root),
+                         eipd_manifest_sha256=manifest_sha256,
+                         pytorch_version=torch.__version__,
+                         model_type=config.model_type)
+    (out / "eipd_config.json").write_text(json.dumps(config_record, indent=2), encoding="utf-8")
     trainer = EIPDTrainer(model=model, processor=processor, args=train_args,
                           train_dataset=ManifestDataset(args.manifest), data_collator=collate,
                           alpha=args.alpha, eipd_lambda=args.lambda_d,

@@ -176,6 +176,7 @@ def build(args) -> dict:
     ordered = sorted(selected.values(), key=lambda entry: entry[0])
     train, val = [], []
     audit = []
+    category_counts = {"train": Counter(), "val": Counter()}
     for priority, rec in ordered:
         if len(train) >= args.train_size and len(val) >= args.val_size:
             break
@@ -193,6 +194,7 @@ def build(args) -> dict:
                   "source_dataset": args.hf_dataset or args.input, "split": split,
                   "selection": "deterministic_video_hash_not_teacher_gain"}
         target.append(record)
+        category_counts[split][rec["category"]] += 1
         audit.append(dict(id=record["id"], video=rec["video"], split=split, category=rec["category"],
                           bridge_gap_frames=record["future_raw_frames"][0] - record["bridge_raw_frame"]))
     out = Path(args.output_dir)
@@ -206,6 +208,7 @@ def build(args) -> dict:
     summary = dict(train=len(train), val=len(val), manifest_sha256=hashes,
                    requested_train=args.train_size,
                    requested_val=args.val_size, candidate_capacity=capacity, rejected=dict(rejects),
+                   category_counts={key: dict(value) for key, value in category_counts.items()},
                    seed=args.seed, selection="stable hash of original video filename",
                    note="Metadata and decoder validation only; semantic correctness and benchmark decontamination require separate audits")
     (out / "audit.json").write_text(json.dumps(dict(summary=summary, samples=audit), indent=2), encoding="utf-8")
