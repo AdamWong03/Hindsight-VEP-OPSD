@@ -2,6 +2,7 @@
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from vep_opsd.eipd_clips import classify_error, load_tasks
+from vep_opsd.eipd_clips import classify_error, load_tasks, yt_command
 from vep_opsd.eipd_final_data import source_id, _split, plan, extract_frames, sha256_file
 
 
@@ -114,6 +115,17 @@ class FinalDataTests(unittest.TestCase):
         self.assertEqual(classify_error("ERROR: Please sign in."), "AUTH_OR_BOT")
         self.assertEqual(classify_error("This video is unavailable"), "GONE")
         self.assertEqual(classify_error("This is a private video; please sign in"), "PRIVATE")
+
+    def test_downloader_uses_automatic_player_selection_by_default(self):
+        args = SimpleNamespace(
+            python="python", sleep_requests=0, proxy=None, player_client=None,
+            cookies=None, remote_ejs=False,
+        )
+        command = yt_command(args)
+        self.assertNotIn("--extractor-args", command)
+        args.player_client = "android"
+        command = yt_command(args)
+        self.assertIn("youtube:player_client=android", command)
 
 
 if __name__ == "__main__":

@@ -140,8 +140,10 @@ def yt_command(args) -> list[str]:
     command = [
         args.python, "-m", "yt_dlp", "--no-playlist", "--js-runtimes", "node",
         "--socket-timeout", "30", "--retries", "5", "--fragment-retries", "5",
-        "--extractor-args", "youtube:player_client=android", "-f", FORMAT_720P,
+        "-f", FORMAT_720P,
     ]
+    if args.player_client:
+        command.extend(["--extractor-args", f"youtube:player_client={args.player_client}"])
     if args.sleep_requests:
         command.extend(["--sleep-requests", str(args.sleep_requests)])
     if args.proxy:
@@ -225,6 +227,10 @@ def main() -> None:
     parser.add_argument("--max-sleep", type=float, default=4.0)
     parser.add_argument("--sleep-requests", type=float, default=0.75)
     parser.add_argument("--proxy", default=None, help="Explicit yt-dlp proxy URL")
+    parser.add_argument(
+        "--player-client", default=None,
+        help="Optional YouTube player client override; defaults to yt-dlp auto-selection",
+    )
     parser.add_argument(
         "--auth-circuit-breaker", type=int, default=16,
         help="Stop scheduling after this many auth/bot failures without a success (0 disables)",

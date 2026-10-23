@@ -38,6 +38,7 @@ case "$stage" in
     if [[ -n "$REUSE_VIDEO_ROOT" ]]; then download_args+=(--reuse-root "$REUSE_VIDEO_ROOT"); fi
     if [[ -n "$YT_REMOTE_EJS" ]]; then download_args+=(--remote-ejs); fi
     if [[ -n "$YT_PROXY" ]]; then download_args+=(--proxy "$YT_PROXY"); fi
+    if [[ -n "$YT_PLAYER_CLIENT" ]]; then download_args+=(--player-client "$YT_PLAYER_CLIENT"); fi
     "$py" -m vep_opsd.eipd_clips "${download_args[@]}"
     ;;
   materialize)
