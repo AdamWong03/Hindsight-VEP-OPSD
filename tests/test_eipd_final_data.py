@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from vep_opsd.eipd_clips import load_tasks
+from vep_opsd.eipd_clips import classify_error, load_tasks
 from vep_opsd.eipd_final_data import source_id, _split, plan, extract_frames, sha256_file
 
 
@@ -109,6 +109,11 @@ class FinalDataTests(unittest.TestCase):
             self.assertEqual(task.start, 62.5)
             self.assertEqual(task.end, 69.75)
             self.assertEqual(task.video, row["video"])
+
+    def test_download_error_classification(self):
+        self.assertEqual(classify_error("ERROR: Please sign in."), "AUTH_OR_BOT")
+        self.assertEqual(classify_error("This video is unavailable"), "GONE")
+        self.assertEqual(classify_error("This is a private video; please sign in"), "PRIVATE")
 
 
 if __name__ == "__main__":

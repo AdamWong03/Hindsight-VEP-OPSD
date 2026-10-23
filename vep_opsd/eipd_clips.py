@@ -20,6 +20,7 @@ from .eipd_data import parse_timestamp
 
 
 TERMINAL = {"GONE", "PRIVATE", "MEMBERS_ONLY", "BAD_METADATA"}
+SUCCESS = {"OK", "EXISTS", "REUSED"}
 FORMAT_720P = (
     "bv*[height<=720][ext=mp4]/bv*[height<=720]/"
     "b[height<=720][ext=mp4]/b[height<=720]"
@@ -70,9 +71,12 @@ def classify_error(detail: str) -> str:
         return "PRIVATE"
     if "members-only" in text:
         return "MEMBERS_ONLY"
-    if any(x in text for x in ("video unavailable", "been removed", "does not exist")):
+    if any(x in text for x in (
+        "video unavailable", "video is unavailable", "been removed", "does not exist",
+        "uploader has closed", "account associated with this video has been terminated",
+    )):
         return "GONE"
-    if "sign in to confirm" in text or "not a bot" in text:
+    if "sign in to confirm" in text or "not a bot" in text or "please sign in" in text:
         return "AUTH_OR_BOT"
     if "429" in text or "too many requests" in text or "rate-limit" in text:
         return "RATE_LIMIT"
@@ -138,6 +142,10 @@ def yt_command(args) -> list[str]:
         "--socket-timeout", "30", "--retries", "5", "--fragment-retries", "5",
         "--extractor-args", "youtube:player_client=android", "-f", FORMAT_720P,
     ]
+    if args.sleep_requests:
+        command.extend(["--sleep-requests", str(args.sleep_requests)])
+    if args.proxy:
+        command.extend(["--proxy", args.proxy])
     if args.cookies:
         command.extend(["--cookies", args.cookies])
     if args.remote_ejs:
@@ -215,21 +223,31 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=1200)
     parser.add_argument("--min-sleep", type=float, default=1.0)
     parser.add_argument("--max-sleep", type=float, default=4.0)
+    parser.add_argument("--sleep-requests", type=float, default=0.75)
+    parser.add_argument("--proxy", default=None, help="Explicit yt-dlp proxy URL")
+    parser.add_argument(
+        "--auth-circuit-breaker", type=int, default=16,
+        help="Stop scheduling after this many auth/bot failures without a success (0 disables)",
+    )
     args = parser.parse_args()
-    if args.reserve_factor < 1 or not 1 <= args.workers <= 16:
-        parser.error("reserve-factor must be >=1 and workers in [1,16]")
+    if (args.reserve_factor < 1 or not 1 <= args.workers <= 16
+            or args.min_sleep < 0 or args.max_sleep < args.min_sleep
+            or args.sleep_requests < 0 or args.auth_circuit_breaker < 0):
+        parser.error("invalid reserve, worker, sleep, or circuit-breaker setting")
     root = Path(args.output).expanduser().resolve()
     output = Path(args.clip_root).expanduser().resolve() if args.clip_root else root / "raw_clips"
     reuse = [Path(value).expanduser().resolve() for value in args.reuse_root]
     tasks = load_tasks(root, args.reserve_factor)
     connection = state_open(root)
-    previous = {
-        video: status
-        for video, status in connection.execute("SELECT video,status FROM downloads")
-    }
+    previous = dict(connection.execute("SELECT video,status FROM downloads"))
     pending = [
         task for task in tasks
         if not (previous.get(task.video) in TERMINAL and not args.retry_terminal)
+        and not (
+            previous.get(task.video) in SUCCESS
+            and (output / task.video).is_file()
+            and (output / task.video).stat().st_size > 0
+        )
     ]
     if args.max_tasks:
         pending = pending[: args.max_tasks]
@@ -241,34 +259,77 @@ def main() -> None:
 
     counts = Counter()
     audit = root / "logs" / "clip-download.jsonl"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    auth_failures_without_success = 0
+    circuit_open = False
+    completed = 0
+
+    def record_result(future, task: Task) -> str:
+        nonlocal completed
+        try:
+            record = future.result()
+        except Exception as exc:
+            record = {**task.__dict__, "status": "WORKER_ERROR", "detail": repr(exc)}
+        status = record["status"]
+        counts[status] += 1
+        attempts = connection.execute(
+            "SELECT attempts FROM downloads WHERE video=?", (task.video,)
+        ).fetchone()
+        connection.execute(
+            "INSERT OR REPLACE INTO downloads VALUES(?,?,?,?,?)",
+            (task.video, status, (attempts[0] if attempts else 0) + 1,
+             time.time(), json.dumps(record, ensure_ascii=False)),
+        )
+        connection.commit()
+        with audit.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        completed += 1
+        print(
+            json.dumps({"completed": completed, "total": len(pending), "status": status,
+                        "counts": dict(counts)}, ensure_ascii=False),
+            flush=True,
+        )
+        return status
+
+    # Keep only a small bounded number of subprocesses in flight. This matters
+    # when a hosting provider starts returning authentication/rate-limit errors:
+    # submitting the complete reserve at once would consume it before a caller
+    # can stop the run.
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(acquire, task, args, output, reuse): task for task in pending}
-        for completed, future in enumerate(concurrent.futures.as_completed(futures), 1):
-            task = futures[future]
-            try:
-                record = future.result()
-            except Exception as exc:
-                record = {**task.__dict__, "status": "WORKER_ERROR", "detail": repr(exc)}
-            status = record["status"]
-            counts[status] += 1
-            attempts = connection.execute(
-                "SELECT attempts FROM downloads WHERE video=?", (task.video,)
-            ).fetchone()
-            connection.execute(
-                "INSERT OR REPLACE INTO downloads VALUES(?,?,?,?,?)",
-                (task.video, status, (attempts[0] if attempts else 0) + 1,
-                 time.time(), json.dumps(record, ensure_ascii=False)),
+        iterator = iter(pending)
+        futures = {}
+        for task in iterator:
+            futures[pool.submit(acquire, task, args, output, reuse)] = task
+            if len(futures) >= args.workers:
+                break
+        while futures:
+            done, _ = concurrent.futures.wait(
+                futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
-            connection.commit()
-            with audit.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-            print(
-                json.dumps({"completed": completed, "total": len(pending), "status": status,
-                            "counts": dict(counts)}, ensure_ascii=False),
-                flush=True,
-            )
+            for future in done:
+                task = futures.pop(future)
+                status = record_result(future, task)
+                if status in SUCCESS:
+                    auth_failures_without_success = 0
+                elif status == "AUTH_OR_BOT":
+                    auth_failures_without_success += 1
+                if (args.auth_circuit_breaker
+                        and auth_failures_without_success >= args.auth_circuit_breaker):
+                    circuit_open = True
+                if not circuit_open:
+                    next_task = next(iterator, None)
+                    if next_task is not None:
+                        futures[pool.submit(acquire, next_task, args, output, reuse)] = next_task
     connection.close()
-    print(json.dumps({"tasks": len(pending), "counts": dict(counts)}, indent=2))
+    summary = {"tasks": len(pending), "completed": completed, "counts": dict(counts),
+               "circuit_open": circuit_open}
+    print(json.dumps(summary, indent=2))
+    if circuit_open:
+        print(
+            "Authentication circuit breaker opened; pending candidates were preserved for retry.",
+            file=sys.stderr,
+        )
+        raise SystemExit(75)
 
 
 if __name__ == "__main__":

@@ -30,11 +30,14 @@ case "$stage" in
       --clip-root "${VIDEO_ROOT:-$EIPD_ROOT/raw_clips}"
       --workers "${DOWNLOAD_WORKERS:-4}"
       --reserve-factor "${DOWNLOAD_RESERVE_FACTOR:-1.25}"
+      --sleep-requests "${DOWNLOAD_SLEEP_REQUESTS:-0.75}"
+      --auth-circuit-breaker "${DOWNLOAD_AUTH_BREAKER:-16}"
     )
     if [[ -n "$YT_COOKIES" ]]; then download_args+=(--cookies "$YT_COOKIES"); fi
     if [[ -n "$DOWNLOAD_MAX_TASKS" ]]; then download_args+=(--max-tasks "$DOWNLOAD_MAX_TASKS"); fi
     if [[ -n "$REUSE_VIDEO_ROOT" ]]; then download_args+=(--reuse-root "$REUSE_VIDEO_ROOT"); fi
     if [[ -n "$YT_REMOTE_EJS" ]]; then download_args+=(--remote-ejs); fi
+    if [[ -n "$YT_PROXY" ]]; then download_args+=(--proxy "$YT_PROXY"); fi
     "$py" -m vep_opsd.eipd_clips "${download_args[@]}"
     ;;
   materialize)
