@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import os
 import random
@@ -36,6 +37,13 @@ class Task:
     split: str
     category: str
     selection_rank: int
+
+
+def task_shard(task: Task, count: int) -> int:
+    """Stable source-level partition for independent proxy workers."""
+
+    digest = hashlib.sha256(task.source_id.encode("ascii")).digest()
+    return int.from_bytes(digest[:8], "big") % count
 
 
 def valid_video(path: Path) -> dict | None:
@@ -219,6 +227,8 @@ def main() -> None:
     parser.add_argument("--reserve-factor", type=float, default=1.25)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--max-tasks", type=int, default=0, help="0 means all scheduled")
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--reuse-root", action="append", default=[])
     parser.add_argument("--cookies", default=None)
     parser.add_argument("--remote-ejs", action="store_true")
@@ -240,12 +250,14 @@ def main() -> None:
     args = parser.parse_args()
     if (args.reserve_factor < 1 or not 1 <= args.workers <= 32
             or args.min_sleep < 0 or args.max_sleep < args.min_sleep
-            or args.sleep_requests < 0 or args.auth_circuit_breaker < 0):
+            or args.sleep_requests < 0 or args.auth_circuit_breaker < 0
+            or args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count):
         parser.error("invalid reserve, worker (must be 1-32), sleep, or circuit-breaker setting")
     root = Path(args.output).expanduser().resolve()
     output = Path(args.clip_root).expanduser().resolve() if args.clip_root else root / "raw_clips"
     reuse = [Path(value).expanduser().resolve() for value in args.reuse_root]
     tasks = load_tasks(root, args.reserve_factor)
+    tasks = [task for task in tasks if task_shard(task, args.shard_count) == args.shard_index]
     connection = state_open(root)
     previous = dict(connection.execute("SELECT video,status FROM downloads"))
     eligible = [
@@ -266,14 +278,16 @@ def main() -> None:
     )
     if args.max_tasks:
         pending = pending[: args.max_tasks]
-    plan = root / "download_plan.jsonl"
+    plan = (root / "download_plan.jsonl" if args.shard_count == 1 else
+            root / f"download_plan.shard-{args.shard_index:02d}-of-{args.shard_count:02d}.jsonl")
     with plan.open("w", encoding="utf-8") as handle:
         for task in tasks:
             handle.write(json.dumps({**task.__dict__, "url": f"https://www.youtube.com/watch?v={task.source_id}"}) + "\n")
     print(json.dumps({"planned": len(tasks), "pending": len(pending), "clip_root": str(output)}), flush=True)
 
     counts = Counter()
-    audit = root / "logs" / "clip-download.jsonl"
+    audit = (root / "logs" / "clip-download.jsonl" if args.shard_count == 1 else
+             root / "logs" / f"clip-download.shard-{args.shard_index:02d}-of-{args.shard_count:02d}.jsonl")
     audit.parent.mkdir(parents=True, exist_ok=True)
     auth_failures_without_success = 0
     circuit_open = False

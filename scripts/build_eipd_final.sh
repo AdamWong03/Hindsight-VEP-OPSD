@@ -39,6 +39,8 @@ case "$stage" in
     if [[ -n "$YT_REMOTE_EJS" ]]; then download_args+=(--remote-ejs); fi
     if [[ -n "$YT_PROXY" ]]; then download_args+=(--proxy "$YT_PROXY"); fi
     if [[ -n "$YT_PLAYER_CLIENT" ]]; then download_args+=(--player-client "$YT_PLAYER_CLIENT"); fi
+    if [[ -n "$DOWNLOAD_SHARD_COUNT" ]]; then download_args+=(--shard-count "$DOWNLOAD_SHARD_COUNT"); fi
+    if [[ -n "$DOWNLOAD_SHARD_INDEX" ]]; then download_args+=(--shard-index "$DOWNLOAD_SHARD_INDEX"); fi
     "$py" -m vep_opsd.eipd_clips "${download_args[@]}"
     ;;
   materialize)

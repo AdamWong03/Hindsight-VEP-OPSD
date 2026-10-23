@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from vep_opsd.eipd_clips import classify_error, load_tasks, yt_command
+from vep_opsd.eipd_clips import Task, classify_error, load_tasks, task_shard, yt_command
 from vep_opsd.eipd_final_data import source_id, _split, plan, extract_frames, sha256_file
 
 
@@ -127,6 +127,14 @@ class FinalDataTests(unittest.TestCase):
         args.player_client = "android"
         command = yt_command(args)
         self.assertIn("youtube:player_client=android", command)
+
+    def test_proxy_shards_are_stable_and_disjoint(self):
+        tasks = [Task(f"abcdefghij{i}_0.mp4", f"abcdefghij{i}", 0, 1,
+                      "train", "Predictive", i) for i in range(10)]
+        left = {task.video for task in tasks if task_shard(task, 2) == 0}
+        right = {task.video for task in tasks if task_shard(task, 2) == 1}
+        self.assertFalse(left & right)
+        self.assertEqual(left | right, {task.video for task in tasks})
 
 
 if __name__ == "__main__":
