@@ -78,6 +78,7 @@ def classify_error(detail: str) -> str:
     if any(x in text for x in (
         "unable to connect to proxy", "cannot connect to proxy",
         "proxy connection refused", "failed to establish a new connection",
+        "unexpected_eof_while_reading", "eof occurred in violation of protocol",
     )):
         return "PROXY_DOWN"
     if "private video" in text:

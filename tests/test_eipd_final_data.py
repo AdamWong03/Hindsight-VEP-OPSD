@@ -120,6 +120,9 @@ class FinalDataTests(unittest.TestCase):
             ),
             "PROXY_DOWN",
         )
+        self.assertEqual(
+            classify_error("SSL: UNEXPECTED_EOF_WHILE_READING"), "PROXY_DOWN"
+        )
         self.assertEqual(classify_error("This video is unavailable"), "GONE")
         self.assertEqual(classify_error("This is a private video; please sign in"), "PRIVATE")
         self.assertEqual(classify_error("Sign in to confirm your age"), "AGE_RESTRICTED")
