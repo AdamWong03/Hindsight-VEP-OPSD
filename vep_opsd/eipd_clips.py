@@ -75,6 +75,11 @@ def valid_video(path: Path) -> dict | None:
 
 def classify_error(detail: str) -> str:
     text = detail.lower()
+    if any(x in text for x in (
+        "unable to connect to proxy", "cannot connect to proxy",
+        "proxy connection refused", "failed to establish a new connection",
+    )):
+        return "PROXY_DOWN"
     if "private video" in text:
         return "PRIVATE"
     if "members-only" in text:
@@ -245,7 +250,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--auth-circuit-breaker", type=int, default=16,
-        help="Stop scheduling after this many auth/bot failures without a success (0 disables)",
+        help="Stop scheduling after this many auth/bot or proxy failures without a success (0 disables)",
     )
     args = parser.parse_args()
     if (args.reserve_factor < 1 or not 1 <= args.workers <= 32
@@ -289,7 +294,7 @@ def main() -> None:
     audit = (root / "logs" / "clip-download.jsonl" if args.shard_count == 1 else
              root / "logs" / f"clip-download.shard-{args.shard_index:02d}-of-{args.shard_count:02d}.jsonl")
     audit.parent.mkdir(parents=True, exist_ok=True)
-    auth_failures_without_success = 0
+    endpoint_failures_without_success = 0
     circuit_open = False
     completed = 0
 
@@ -339,15 +344,15 @@ def main() -> None:
                 task = futures.pop(future)
                 status = record_result(future, task)
                 if status in SUCCESS:
-                    auth_failures_without_success = 0
-                    # Authentication failures return much faster than successful
+                    endpoint_failures_without_success = 0
+                    # Endpoint failures return much faster than successful
                     # video cuts. A later success from the same in-flight batch
                     # proves the endpoint is usable and cancels a provisional trip.
                     circuit_open = False
-                elif status == "AUTH_OR_BOT":
-                    auth_failures_without_success += 1
+                elif status in {"AUTH_OR_BOT", "PROXY_DOWN"}:
+                    endpoint_failures_without_success += 1
                 if (args.auth_circuit_breaker
-                        and auth_failures_without_success >= args.auth_circuit_breaker):
+                        and endpoint_failures_without_success >= args.auth_circuit_breaker):
                     circuit_open = True
                 if not circuit_open:
                     next_task = next(iterator, None)
@@ -359,7 +364,7 @@ def main() -> None:
     print(json.dumps(summary, indent=2))
     if circuit_open:
         print(
-            "Authentication circuit breaker opened; pending candidates were preserved for retry.",
+            "Endpoint circuit breaker opened; pending candidates were preserved for retry.",
             file=sys.stderr,
         )
         raise SystemExit(75)

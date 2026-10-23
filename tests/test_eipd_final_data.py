@@ -113,6 +113,13 @@ class FinalDataTests(unittest.TestCase):
 
     def test_download_error_classification(self):
         self.assertEqual(classify_error("ERROR: Please sign in."), "AUTH_OR_BOT")
+        self.assertEqual(
+            classify_error(
+                "Unable to connect to proxy: Failed to establish a new connection: "
+                "[Errno 111] Connection refused"
+            ),
+            "PROXY_DOWN",
+        )
         self.assertEqual(classify_error("This video is unavailable"), "GONE")
         self.assertEqual(classify_error("This is a private video; please sign in"), "PRIVATE")
         self.assertEqual(classify_error("Sign in to confirm your age"), "AGE_RESTRICTED")
