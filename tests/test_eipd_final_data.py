@@ -115,6 +115,7 @@ class FinalDataTests(unittest.TestCase):
         self.assertEqual(classify_error("ERROR: Please sign in."), "AUTH_OR_BOT")
         self.assertEqual(classify_error("This video is unavailable"), "GONE")
         self.assertEqual(classify_error("This is a private video; please sign in"), "PRIVATE")
+        self.assertEqual(classify_error("Sign in to confirm your age"), "AGE_RESTRICTED")
 
     def test_downloader_uses_automatic_player_selection_by_default(self):
         args = SimpleNamespace(

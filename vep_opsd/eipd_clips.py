@@ -19,7 +19,7 @@ from pathlib import Path
 from .eipd_data import parse_timestamp
 
 
-TERMINAL = {"GONE", "PRIVATE", "MEMBERS_ONLY", "BAD_METADATA"}
+TERMINAL = {"GONE", "PRIVATE", "MEMBERS_ONLY", "AGE_RESTRICTED", "BAD_METADATA"}
 SUCCESS = {"OK", "EXISTS", "REUSED"}
 FORMAT_720P = (
     "bv*[height<=720][ext=mp4]/bv*[height<=720]/"
@@ -71,6 +71,8 @@ def classify_error(detail: str) -> str:
         return "PRIVATE"
     if "members-only" in text:
         return "MEMBERS_ONLY"
+    if "confirm your age" in text or "age-restricted" in text:
+        return "AGE_RESTRICTED"
     if any(x in text for x in (
         "video unavailable", "video is unavailable", "been removed", "does not exist",
         "uploader has closed", "account associated with this video has been terminated",
@@ -246,7 +248,7 @@ def main() -> None:
     tasks = load_tasks(root, args.reserve_factor)
     connection = state_open(root)
     previous = dict(connection.execute("SELECT video,status FROM downloads"))
-    pending = [
+    eligible = [
         task for task in tasks
         if not (previous.get(task.video) in TERMINAL and not args.retry_terminal)
         and not (
@@ -255,6 +257,13 @@ def main() -> None:
             and (output / task.video).stat().st_size > 0
         )
     ]
+    # New candidates are the useful frontier. Historical transient failures are
+    # retained, but retried only after never-attempted reserve candidates so a
+    # stale block of age/auth/network errors cannot starve the whole build.
+    pending = (
+        [task for task in eligible if task.video not in previous]
+        + [task for task in eligible if task.video in previous]
+    )
     if args.max_tasks:
         pending = pending[: args.max_tasks]
     plan = root / "download_plan.jsonl"
@@ -317,6 +326,10 @@ def main() -> None:
                 status = record_result(future, task)
                 if status in SUCCESS:
                     auth_failures_without_success = 0
+                    # Authentication failures return much faster than successful
+                    # video cuts. A later success from the same in-flight batch
+                    # proves the endpoint is usable and cancels a provisional trip.
+                    circuit_open = False
                 elif status == "AUTH_OR_BOT":
                     auth_failures_without_success += 1
                 if (args.auth_circuit_breaker
