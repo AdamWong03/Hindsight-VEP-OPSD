@@ -343,7 +343,10 @@ def main() -> None:
             for future in done:
                 task = futures.pop(future)
                 status = record_result(future, task)
-                if status in SUCCESS:
+                # Only an actual network download proves that the endpoint is
+                # healthy. EXISTS/REUSED are local fast paths and must not reset
+                # a proxy/authentication failure streak.
+                if status == "OK":
                     endpoint_failures_without_success = 0
                     # Endpoint failures return much faster than successful
                     # video cuts. A later success from the same in-flight batch
