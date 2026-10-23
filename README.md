@@ -1,136 +1,86 @@
-> **Full-scale EIPD-Data-v1:** [Final data guide](docs/eipd-final-data.md).
-> Build 50K train + 5K validation, source-video-grouped and portable PNG caches.
-> EIPD is separate from the legacy Gold+Future OPSD baseline; GPU model verification remains required.
+# Hindsight-VEP-OPSD
 
-> **Active development: EIPD (Evidence-Increment Predictive Distillation).**
-> See [the frozen method, dataset construction and training contract](docs/eipd-implementation.md).
-> EIPD uses a real intermediate video frame as *limited* privileged evidence,
-> never gold answers in teacher prompts, and differentiable Future-L1 continuous
-> latent replay. New entry points: `python -m vep_opsd.eipd_data` and
-> `python -m vep_opsd.eipd_train`. The sections below document the
-> **legacy full-future + gold OPSD baseline**, retained for reproducibility.
-> The EIPD 8B/GPU end-to-end training path has not yet been certified.
+**Active method: EIPD (Evidence-Increment Predictive Distillation)** for video event prediction. The original Gold+Future OPSD baseline is retained for reproducibility but is no longer the default project workflow.
 
----
+EIPD distills answer predictions using a frozen same-initialization teacher under two conditions: Past only and Past plus **one genuinely intermediate Bridge frame**. Both branches replay the student's sampled discrete reasoning with separately recomputed continuous Future-L1 latents. Ground-truth answers and full future-target frames are never included in the EIPD teacher prompt; the original Future-L1 SFT branch keeps its full future supervision.
 
-# Hindsight-Privileged VEP-OPSD
+## Final-scale dataset: 50K train + 5K validation
 
-On-policy self-distillation for open-ended Video Event Prediction with
-Qwen3-VL. This repository contains one method and does not depend on
-Future-L1 continuous latents or the old PFSD/Listwise verifier.
+The authoritative preparation instructions are in **[EIPD-Data-v1](docs/eipd-final-data.md)**.
 
-## Method
+| Split | Predictive | Instructional | Camera | Total |
+| --- | ---: | ---: | ---: | ---: |
+| Train | 30,000 | 15,000 | 5,000 | 50,000 |
+| Validation | 3,000 | 1,500 | 500 | 5,000 |
 
-For each training example, the current Student first samples one complete
-`<reason>...</reason><answer>...</answer>` trajectory using only the observed
-video and question. The trajectory is generated again every time the example is
-visited; there is no offline rollout cache.
+The fixed category mix is a preregistered sampling choice, not a claim of optimality. The pipeline scans the original TwiFF-2.7M metadata, groups clips by original source video, enforces verified benchmark/Future-L1 overlap exclusions and maintains a deterministic candidate reserve. It downloads only necessary source clips and caches all original Past and Future-SFT frames plus the intermediate Bridge as full-resolution PNG. The dataset is portable: final manifests contain relative PNG paths and checksums; the training server needs no original MP4 files.
 
-A fixed, same-source Teacher then receives:
+### Get started on the data server
 
-- the observed frames;
-- the real future frames;
-- the dataset Gold Answer;
-- the exact Student-generated tokens as its teacher-forced assistant prefix.
+    git clone https://github.com/AdamWong03/Hindsight-VEP-OPSD.git
+    cd Hindsight-VEP-OPSD
+    python -m pip install numpy pillow decord datasets pyarrow huggingface_hub yt-dlp
 
-At every sampled prefix (y_{<t}), the Teacher produces
-(p_T(\cdot\mid x_{past},x_{future},a^*,y_{<t})), while the Student produces
-(p_S(\cdot\mid x_{past},y_{<t})). Training minimizes the mean generalized
-Jensen-Shannon divergence over generated positions:
+    export EIPD_ROOT=/data/EIPD-Data-v1
+    export EXCLUDE_FUTUREL1=/data/exclude_futurel1.txt
+    export EXCLUDE_FUTUREBENCH=/data/exclude_futurebench.txt
+    export EXCLUDE_TWIFFBENCH=/data/exclude_twiffbench.txt
 
-[
-L = \frac{1}{|y|}\sum_t
-  \beta KL(p_T^t\Vert m^t) + (1-\beta)KL(p_S^t\Vert m^t),
-\quad
-m^t=\beta p_T^t+(1-\beta)p_S^t.
-]
+    bash scripts/build_eipd_final.sh plan
 
-The distribution is represented by the Teacher's Top-K tokens plus one tail
-mass bucket. This retains alternatives and uncertainty without materializing
-two full-vocabulary probability tensors. Gradients flow only through the
-Student.
+After planning, arrange verified source video acquisition as described in the guide. FFmpeg/ffprobe are required for downloads. With video files under EIPD_ROOT/raw_clips:
 
-The fixed Teacher is the original base model. The Student is a language-model
-LoRA on that base, so Teacher forwards simply disable the adapter; a second 8B
-copy and EMA are unnecessary. Vision parameters stay frozen.
+    export VIDEO_ROOT=/data/EIPD-Data-v1/raw_clips
+    bash scripts/build_eipd_final.sh download
+    bash scripts/build_eipd_final.sh materialize
+    bash scripts/build_eipd_final.sh verify
+    bash scripts/build_eipd_final.sh audit
 
-This design gives the three supervision sources distinct roles:
+The three exclusion files must contain real source IDs (not placeholders). Source-to-TwiFF segment time alignment must be confirmed. Construction is restartable. The final manifest is emitted only once all frozen category counts are met.
 
-- Student rollout supplies the on-policy prefixes where the model will actually
-  make decisions at inference time.
-- Future video is privileged visual evidence available only to the Teacher.
-- Gold Answer is the Teacher's semantic anchor when sparse future frames are
-  ambiguous.
+### Output format
 
-Student rollout, Student recomputation, and benchmark inference never receive
-future frames or Gold Answers. The trained output remains an open-ended event
-prediction, not a Yes/No judgment.
+    EIPD-Data-v1/
+      train.jsonl
+      val.jsonl
+      dataset_summary.json
+      frames/train/{sample_id}/{past_00.png,bridge.png,future_00.png,...}
+      frames/val/{sample_id}/{past_00.png,bridge.png,future_00.png,...}
+      candidates.jsonl
+      state.sqlite
+      download_state.sqlite
+      audit_sheets/
 
-## Key files
+All PNG paths in train.jsonl/val.jsonl are relative to the dataset root, preserving exact Past/Bridge/Future order. Original TwiFF index lists and native frame positions remain in the metadata.
 
-- `vep_opsd/trainer.py`: rollout, privileged Teacher forward, Student forward,
-  and token-level loss.
-- `vep_opsd/objective.py`: Top-K-plus-tail distributions and generalized JSD.
-- `vep_opsd/prompts.py`: strictly separated Student and Teacher contexts.
-- `vep_opsd/train.py`: Qwen3-VL loading, frozen-base Student LoRA, and Trainer.
-- `scripts/train_50k.sh`: complete distributed launch configuration.
-- `scripts/merge_adapter.py`: produces a standalone checkpoint for evaluation.
-- `eval_tasks/`: FutureBench and TwiFF-Bench task templates.
+## Model training
 
-## Installation and data
+Follow **[EIPD implementation contract](docs/eipd-implementation.md)**. Run a real Future-L1-SFT Qwen3-VL checkpoint's one-step smoke test before formal training:
 
-```bash
-pip install -e .
-cp .env.example .env
-```
+    python -m vep_opsd.eipd_train \
+      --future-l1-root /repos/Future-L1 \
+      --model /models/future-l1-sft \
+      --manifest /data/EIPD-Data-v1/train.jsonl \
+      --output /runs/eipd-smoke \
+      --max-steps 1 --gradient-accumulation-steps 1
 
-Set `MODEL`, `DATA`, and output paths in `.env`. The expected compact
-manifest is documented in [docs/data-format.md](docs/data-format.md); every row
-must contain a non-empty Gold Answer, observed-frame indices in `image`, and
-strictly later future-frame indices in `reasoning_image`.
+The live 8B GPU/distributed training integration is **not yet certified**. Before any full run, verify generation-versus-replay latent parity, answer-token alignment, gradients to continuous latents, SFT loss and GPU memory. No benchmark gains are claimed.
 
-## Training
+## Source layout
 
-```bash
-bash scripts/train_50k.sh
+| Path | Purpose |
+| --- | --- |
+| vep_opsd/eipd_final_data.py | Full TwiFF metadata selection, PNG materialization, verification |
+| vep_opsd/eipd_clips.py | Restartable verified source clip retrieval |
+| vep_opsd/eipd_audit.py | Stratified video-question-answer contact sheets |
+| vep_opsd/eipd_train.py | EIPD two-condition teacher and student training |
+| vep_opsd/eipd_objective.py | Evidence-increment weighted answer KL |
+| vep_opsd/eipd_replay.py | Differentiable continuous latent replay |
+| scripts/build_eipd_final.sh | plan / panda-subset / download / materialize / verify / audit |
+| docs/legacy-opsd.md | Old Gold+Full-Future OPSD baseline |
 
-# Example overrides
-bash scripts/train_50k.sh \
-  --output-dir /path/to/run \
-  --nproc-per-node 8 \
-  --global-batch-size 128 \
-  --distillation-top-k 100 \
-  --jsd-beta 0.5
-```
+**Legacy:** vep_opsd/train.py, vep_opsd/trainer.py and scripts/train_50k.sh implement *the old Gold+Future OPSD*, not EIPD.
 
-Default method constants are rollout temperature 0.8, top-p 0.95, maximum 512
-new tokens, Teacher Top-K 100, distillation temperature 1.0, JSD beta 0.5, and a
-tail bucket. Student LoRA defaults to rank 64 and alpha 128. Checkpoints,
-resolved configuration, generated token IDs/text, Gold Answer, Teacher sampled
-token likelihood, token JSD, and stage timings are saved under `OUTPUT_DIR`.
+## Attribution and licensing
 
-## Evaluation
-
-Training outputs are PEFT adapters. Merge one before using the existing
-FutureBench/TwiFF evaluation path:
-
-```bash
-python scripts/merge_adapter.py \
-  --adapter /path/to/run \
-  --output /path/to/run-merged
-
-bash scripts/eval.sh --bench twiff --ckpt /path/to/run-merged \
-  --eval-out /path/to/results/twiff
-
-bash scripts/eval.sh --bench futurebench --ckpt /path/to/run-merged \
-  --eval-out /path/to/results/futurebench \
-  --futurebench-json /path/to/FutureBench/futurebench_local.json
-```
-
-Effectiveness must be determined by completed FutureBench and TwiFF-Bench
-evaluation, not training loss or Teacher likelihood.
-
-## Acknowledgement
-
-The project structure and VEP data convention build on
-[OpenGVLab/Future-L1](https://github.com/OpenGVLab/Future-L1).
+The work builds on [Future-L1](https://github.com/OpenGVLab/Future-L1), [TwiFF](https://github.com/LiuJunhua02/TwiFF) and [Panda-70M](https://github.com/snap-research/Panda-70M). Respect original videos' research-use and redistribution restrictions; public distribution of third-party video pixels is not assumed.

@@ -27,33 +27,48 @@ from .eipd_objective import eipd_loss
 from .eipd_replay import replay_with_latents, answer_prediction_rows
 
 class ManifestDataset(Dataset):
+    """Read portable PNG manifests produced by eipd_final_data."""
+
     def __init__(self, manifest: str):
-        self.root = Path(manifest).expanduser().resolve().parent
-        self.rows = [json.loads(x) for x in Path(manifest).read_text(encoding="utf-8").splitlines() if x.strip()]
+        path = Path(manifest).expanduser().resolve()
+        self.root = path.parent
+        self.rows = [
+            json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
         if not self.rows:
-            raise ValueError("Empty EIPD    def __getitem__(self, i):
+            raise ValueError("Empty EIPD manifest")
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, i):
         from PIL import Image
         row = dict(self.rows[i])
         if not all(k in row for k in ("past_files", "bridge_file", "future_files")):
-            raise ValueError("Requires the finalized EIPD cached-frame manifest")
+            raise ValueError("Requires a finalized EIPD cached-frame manifest")
         if not max(row["past_native_indices"]) < row["bridge_native_index"] < min(row["future_native_indices"]):
-            raise ValueError("Invalid Bridge chronology")
+            raise ValueError(f"Invalid Bridge chronology: {row['sample_id']}")
+
         def path(rel):
             target = (self.root / rel).resolve()
             if not target.is_relative_to(self.root):
-                raise ValueError("Unsafe cached frame path")
+                raise ValueError(f"Unsafe cached frame path: {rel}")
             if not target.is_file():
                 raise FileNotFoundError(target)
             return target
+
         def rgb(rel):
-            with Image.open(path(rel)) as im:
-                return im.convert("RGB").copy()
+            with Image.open(path(rel)) as image:
+                return image.convert("RGB").copy()
+
         row["_past_abs"] = [str(path(x)) for x in row["past_files"]]
         row["_future_abs"] = [str(path(x)) for x in row["future_files"]]
-        return {"row": row, "observed":[rgb(x) for x in row["past_files"]],
-                "bridge":rgb(row["bridge_file"])}
-)
-        return {"row": row, "observed": obs, "bridge": bridge}
+        return {
+            "row": row,
+            "observed": [rgb(x) for x in row["past_files"]],
+            "bridge": rgb(row["bridge_file"]),
+        }
 
 def collate(items):
     if len(items) != 1:
