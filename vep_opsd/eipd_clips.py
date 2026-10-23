@@ -238,10 +238,10 @@ def main() -> None:
         help="Stop scheduling after this many auth/bot failures without a success (0 disables)",
     )
     args = parser.parse_args()
-    if (args.reserve_factor < 1 or not 1 <= args.workers <= 16
+    if (args.reserve_factor < 1 or not 1 <= args.workers <= 32
             or args.min_sleep < 0 or args.max_sleep < args.min_sleep
             or args.sleep_requests < 0 or args.auth_circuit_breaker < 0):
-        parser.error("invalid reserve, worker, sleep, or circuit-breaker setting")
+        parser.error("invalid reserve, worker (must be 1-32), sleep, or circuit-breaker setting")
     root = Path(args.output).expanduser().resolve()
     output = Path(args.clip_root).expanduser().resolve() if args.clip_root else root / "raw_clips"
     reuse = [Path(value).expanduser().resolve() for value in args.reuse_root]
