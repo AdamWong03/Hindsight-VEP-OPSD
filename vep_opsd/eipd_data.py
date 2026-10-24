@@ -38,7 +38,8 @@ def uniform_pool(vlen: int, n: int = 8) -> list[int]:
     end = vlen - 1 if vlen - 2 <= start else vlen - 2
     count = min(n - 2, end - start)
     steps = np.linspace(start + 1, end, count + 1).astype(int)
-    middle = [(steps[i] + steps[i + 1] - 1) // 2 for i in range(len(steps) - 1)]
+    # Keep public metadata JSON-native; numpy scalar indices are not serializable.
+    middle = [int((steps[i] + steps[i + 1] - 1) // 2) for i in range(len(steps) - 1)]
     result = [start, *middle, end]
     return result + [result[-1]] * (n - len(result))
 

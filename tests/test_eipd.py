@@ -13,6 +13,7 @@ from vep_opsd.eipd_replay import answer_prediction_rows
 class EIPDTest(unittest.TestCase):
     def test_twitter_eight_frame_pool(self):
         self.assertEqual(len(uniform_pool(80)), 8)
+        self.assertTrue(all(type(index) is int for index in uniform_pool(80)))
         self.assertTrue(all(a <= b for a, b in zip(uniform_pool(80), uniform_pool(80)[1:])))
         self.assertEqual(uniform_pool(80)[0], 1)
         self.assertEqual(uniform_pool(80)[-1], 78)
