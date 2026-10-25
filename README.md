@@ -2,7 +2,7 @@
 
 **Active method: EIPD (Evidence-Increment Predictive Distillation)** for video event prediction. The original Gold+Future OPSD baseline is retained for reproducibility but is no longer the default project workflow.
 
-EIPD distills answer predictions using a frozen same-initialization teacher under two conditions: Past only and Past plus **one genuinely intermediate Bridge frame**. Both branches replay the student's sampled discrete reasoning with separately recomputed continuous Future-L1 latents. Ground-truth answers and full future-target frames are never included in the EIPD teacher prompt; the original Future-L1 SFT branch keeps its full future supervision.
+EIPD starts from the original Qwen3-VL checkpoint and distills answer predictions using a frozen same-initialization teacher under two conditions: Past only and Past plus **one genuinely intermediate Bridge frame**. The branches replay the student's sampled discrete reasoning and teacher-force the Gold Answer using ordinary text tokens. Bridge and Gold are training signals only; Student rollout and inference receive Past frames and the question only. Future-L1 weights and continuous latent generation are not used.
 
 ## Final-scale dataset: 50K train + 5K validation
 
@@ -55,16 +55,15 @@ All PNG paths in train.jsonl/val.jsonl are relative to the dataset root, preserv
 
 ## Model training
 
-Follow **[EIPD implementation contract](docs/eipd-implementation.md)**. Run a real Future-L1-SFT Qwen3-VL checkpoint's one-step smoke test before formal training:
+Follow **[EIPD implementation contract](docs/eipd-implementation.md)**. Run an original Qwen3-VL checkpoint's one-step smoke test before formal training:
 
     python -m vep_opsd.eipd_train \
-      --future-l1-root /repos/Future-L1 \
-      --model /models/future-l1-sft \
+      --model /models/Qwen3-VL-8B-Instruct \
       --manifest /data/EIPD-Data-v1/train.jsonl \
       --output /runs/eipd-smoke \
       --max-steps 1 --gradient-accumulation-steps 1
 
-The live 8B GPU/distributed training integration is **not yet certified**. Before any full run, verify generation-versus-replay latent parity, answer-token alignment, gradients to continuous latents, SFT loss and GPU memory. No benchmark gains are claimed.
+If a local weight-only copy is missing its processor files, pass `--processor` pointing to a complete original Qwen3-VL processor directory. This does not load that directory's model weights. No benchmark gains are claimed from training loss alone.
 
 ## Source layout
 
@@ -75,7 +74,7 @@ The live 8B GPU/distributed training integration is **not yet certified**. Befor
 | vep_opsd/eipd_audit.py | Stratified video-question-answer contact sheets |
 | vep_opsd/eipd_train.py | EIPD two-condition teacher and student training |
 | vep_opsd/eipd_objective.py | Evidence-increment weighted answer KL |
-| vep_opsd/eipd_replay.py | Differentiable continuous latent replay |
+| vep_opsd/eipd_replay.py | Archived continuous-latent prototype (not used by active training) |
 | scripts/build_eipd_final.sh | plan / panda-subset / download / materialize / verify / audit |
 | docs/legacy-opsd.md | Old Gold+Full-Future OPSD baseline |
 

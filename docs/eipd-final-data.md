@@ -182,14 +182,13 @@ failure rates. Do not claim full semantic certification from structural QA.
 ## 7. Train with finalized PNG manifest
 
   python -m vep_opsd.eipd_train \
-    --future-l1-root /repos/Future-L1 \
-    --model /models/future-l1-sft \
+    --model /models/Qwen3-VL-8B-Instruct \
     --manifest /data/EIPD-Data-v1/train.jsonl \
     --output /runs/eipd-smoke --max-steps 1 \
     --gradient-accumulation-steps 1
 
-After 8B-model latent replay, SFT image collator and GPU parity checks pass,
-remove max-steps for full runs. Legacy scripts/train_50k.sh remains Gold+Full
-Future OPSD and MUST NOT be used for EIPD. The frozen algorithm is untouched:
-Teacher uses Past vs Past+Bridge, no Gold in the prompt, while Future-SFT images
-are used only in the original SFT branch.
+After the original 8B model completes the real-data optimization step, remove
+max-steps for the full run. Legacy scripts/train_50k.sh remains Gold+Full-Future
+OPSD and MUST NOT be used for EIPD. Teacher uses Past vs Past+Bridge, Gold is a
+teacher-forced answer target rather than prompt content, and Future-SFT images
+are retained for provenance/audit but are not consumed by active training.
