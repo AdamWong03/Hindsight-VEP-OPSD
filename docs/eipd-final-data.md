@@ -95,6 +95,20 @@ An optional `--cookies` file may be supplied when the hosting site requires
 it. A small `--max-tasks` run should be used to verify network access before
 the full acquisition.
 
+On a host exposing several local HTTP proxies, the pool launcher probes real
+YouTube extraction, deduplicates identical public egress IPs, and assigns one
+deterministic shard to every healthy egress. A lane waits and probes again when
+its proxy goes down, then resumes from the shared SQLite state automatically:
+
+  EIPD_ROOT=/data/EIPD-Data-v1 \
+  PYTHON=/path/to/python \
+  REUSE_VIDEO_ROOT=/data/already_verified_twiff_clips \
+  bash scripts/eipd_proxy_pool.sh
+
+All lane output and periodic aggregate dataset progress are written to
+`$EIPD_ROOT/logs/proxy-pool.log`. Override `PROXY_PORTS` to change the local
+proxy candidate list and `POOL_WORKERS_PER_PROXY` to control per-egress load.
+
 Alternatively, run Panda's own video2dataset on the subset CSV with url and
 timestamp columns. Inspect the downloaded MP4 metadata and establish a
 verified mapping:
