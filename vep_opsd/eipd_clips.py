@@ -23,8 +23,15 @@ from .eipd_data import parse_timestamp
 TERMINAL = {"GONE", "PRIVATE", "MEMBERS_ONLY", "AGE_RESTRICTED", "BAD_METADATA"}
 SUCCESS = {"OK", "EXISTS", "REUSED"}
 FORMAT_720P = (
-    "bv*[height<=720][ext=mp4]/bv*[height<=720]/"
-    "b[height<=720][ext=mp4]/b[height<=720]"
+    # HLS formats can be ranked above direct DASH/HTTP formats by recent
+    # yt-dlp versions.  ffmpeg's input seeking does not reliably preserve the
+    # requested timeline for those HLS manifests, producing a zero-frame MP4
+    # for non-zero download sections.  Exact TwiFF clips therefore require a
+    # directly seekable HTTP(S) media URL.
+    "bv*[height<=720][ext=mp4][protocol^=http]/"
+    "bv*[height<=720][protocol^=http]/"
+    "b[height<=720][ext=mp4][protocol^=http]/"
+    "b[height<=720][protocol^=http]"
 )
 
 
