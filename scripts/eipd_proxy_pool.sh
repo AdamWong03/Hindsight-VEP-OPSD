@@ -12,7 +12,7 @@
 #   REUSE_VIDEO_ROOT=/data1/wyd/datasets/TwiFF-Privileged-50K/videos
 #
 # Optional knobs:
-#   PROXY_PORTS="6088 6101 6102 7890 7897 1778 6070 17892 17893 17894 17895 17896"
+#   PROXY_PORTS="6088 6101 6102"
 #   POOL_WORKERS_PER_PROXY=2
 #   POOL_PROBE_INTERVAL=60
 #   POOL_STATUS_INTERVAL=300
@@ -27,7 +27,9 @@ EIPD_ROOT="${EIPD_ROOT:-/data1/wyd/datasets/EIPD-Data-v1}"
 PYTHON="${PYTHON:-/data1/envs/opsd/bin/python}"
 VIDEO_ROOT="${VIDEO_ROOT:-${EIPD_ROOT}/raw_clips}"
 REUSE_VIDEO_ROOT="${REUSE_VIDEO_ROOT:-/data1/wyd/datasets/TwiFF-Privileged-50K/videos}"
-PROXY_PORTS="${PROXY_PORTS:-6088 6101 6102 7890 7897 1778 6070 17892 17893 17894 17895 17896}"
+# Only use the project's explicitly authorised VPN endpoints by default.
+# Additional ports must be opted into explicitly through PROXY_PORTS.
+PROXY_PORTS="${PROXY_PORTS:-6088 6101 6102}"
 POOL_WORKERS_PER_PROXY="${POOL_WORKERS_PER_PROXY:-2}"
 POOL_PROBE_INTERVAL="${POOL_PROBE_INTERVAL:-60}"
 POOL_STATUS_INTERVAL="${POOL_STATUS_INTERVAL:-300}"

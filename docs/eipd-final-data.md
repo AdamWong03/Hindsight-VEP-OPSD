@@ -107,7 +107,9 @@ its proxy goes down, then resumes from the shared SQLite state automatically:
 
 All lane output and periodic aggregate dataset progress are written to
 `$EIPD_ROOT/logs/proxy-pool.log`. Override `PROXY_PORTS` to change the local
-proxy candidate list and `POOL_WORKERS_PER_PROXY` to control per-egress load.
+proxy candidate list (the default authorised list is `6088 6101 6102`) and
+`POOL_WORKERS_PER_PROXY` to control per-egress load. Never add a shared or
+third-party proxy without the endpoint owner's permission.
 
 Alternatively, run Panda's own video2dataset on the subset CSV with url and
 timestamp columns. Inspect the downloaded MP4 metadata and establish a
