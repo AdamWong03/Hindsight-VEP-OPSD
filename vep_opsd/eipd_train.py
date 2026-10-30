@@ -1,18 +1,22 @@
 """Train text-token EIPD from the original Qwen3-VL checkpoint.
 
 The trainable Student sees Past frames only. A frozen copy of the same base
-checkpoint (implemented by disabling the Student LoRA adapter) is replayed
-under Past and Past+Bridge conditions. All three branches are teacher-forced
-on the Student's sampled reasoning prefix followed by the dataset Gold Answer.
-No Future-L1 checkpoint or continuous latent token is used.
+checkpoint is replayed under Past and Past+Bridge conditions. In LoRA mode the
+copy is implemented by disabling the Student adapter. In full-finetuning mode
+it is a separate frozen model, so the Teacher remains the original checkpoint
+while all language-model Student parameters are updated. All three branches
+are teacher-forced on the Student's sampled reasoning prefix followed by the
+dataset Gold Answer. No Future-L1 checkpoint or continuous latent token is
+used.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 import torch
@@ -30,6 +34,12 @@ from transformers import (
 
 from .eipd_objective import eipd_loss
 from .trainer import drop_empty_param_groups, sync_scheduler_lambdas
+
+
+def log_stage(message: str):
+    """Emit one unbuffered startup marker without duplicating it on every rank."""
+    if int(os.environ.get("LOCAL_RANK", "0")) == 0:
+        print(f"[EIPD startup] {message}", flush=True)
 
 
 class ManifestDataset(Dataset):
@@ -180,13 +190,14 @@ def _answer_logits(model, prompt, continuation, answer_tokens):
 
 
 @contextmanager
-def frozen_base_teacher(model):
-    """Use the original checkpoint as Teacher by temporarily disabling LoRA."""
+def frozen_teacher(model, *, disable_adapter: bool):
+    """Run an immutable Teacher, optionally disabling the Student LoRA."""
     was_training = model.training
     old_cache = model.config.use_cache
     model.eval()
     model.config.use_cache = False
-    with model.disable_adapter():
+    adapter_context = model.disable_adapter() if disable_adapter else nullcontext()
+    with adapter_context:
         with torch.no_grad():
             try:
                 yield
@@ -204,6 +215,8 @@ class EIPDTrainer(Trainer):
         eipd_lambda: float,
         max_new_tokens: int,
         max_answer_tokens: int = 128,
+        teacher_model=None,
+        teacher_device: str | None = None,
         **kwargs,
     ):
         super().__init__(*args, processing_class=processor, **kwargs)
@@ -212,6 +225,11 @@ class EIPDTrainer(Trainer):
         self.eipd_lambda = eipd_lambda
         self.max_new_tokens = max_new_tokens
         self.max_answer_tokens = max_answer_tokens
+        self.teacher_model = teacher_model
+        if self.teacher_model is not None:
+            target = torch.device(teacher_device) if teacher_device else self.accelerator.device
+            self.teacher_model.to(target)
+            self.teacher_model.eval()
 
     def create_optimizer(self):
         optimizer = super().create_optimizer()
@@ -271,6 +289,7 @@ class EIPDTrainer(Trainer):
                     max_new_tokens=self.max_new_tokens,
                     use_cache=True,
                     pad_token_id=tokenizer.pad_token_id,
+                    synced_gpus=self.args.world_size > 1,
                 )
         finally:
             base_model.config.use_cache = old_cache
@@ -292,19 +311,26 @@ class EIPDTrainer(Trainer):
         reasoning = torch.tensor(reasoning_ids, dtype=torch.long, device=device).unsqueeze(0)
         continuation = torch.cat([reasoning, gold], dim=1)
 
-        with frozen_base_teacher(base_model):
+        teacher_model = self.teacher_model or base_model
+        teacher_device = next(teacher_model.parameters()).device
+        teacher_continuation = continuation.to(teacher_device)
+        with frozen_teacher(
+            teacher_model, disable_adapter=self.teacher_model is None
+        ):
             no_bridge = _answer_logits(
-                base_model,
-                self._prompt(base_model, inputs),
-                continuation,
+                teacher_model,
+                self._prompt(teacher_model, inputs),
+                teacher_continuation,
                 gold.shape[1],
             )
             with_bridge = _answer_logits(
-                base_model,
-                self._prompt(base_model, inputs, bridge=inputs["bridge"]),
-                continuation,
+                teacher_model,
+                self._prompt(teacher_model, inputs, bridge=inputs["bridge"]),
+                teacher_continuation,
                 gold.shape[1],
             )
+        no_bridge = no_bridge.to(device)
+        with_bridge = with_bridge.to(device)
 
         student_logits = _answer_logits(model, student_prompt, continuation, gold.shape[1])
         supervised = F.cross_entropy(student_logits.float(), gold[0])
@@ -333,25 +359,50 @@ def main():
     )
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--training-mode",
+        choices=("lora", "full"),
+        default="lora",
+        help="Use LoRA or full language-model finetuning; the visual tower is frozen in both modes",
+    )
     parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--weight-decay", type=float, default=0.1)
+    parser.add_argument("--warmup-ratio", type=float, default=0.1)
+    parser.add_argument("--lr-scheduler-type", default="cosine")
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--deepspeed", default=None)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=16)
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--max-answer-tokens", type=int, default=128)
+    parser.add_argument(
+        "--teacher-device",
+        default=None,
+        help="Optional device for the independent full-FT Teacher (for example cuda:1)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lambda-d", type=float, default=0.2)
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--image-max-pixels", type=int, default=2048 * 32 * 32)
     parser.add_argument("--lora-r", type=int, default=64)
     parser.add_argument("--lora-alpha", type=int, default=128)
+    parser.add_argument(
+        "--gradient-checkpointing",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
+    parser.add_argument("--logging-steps", type=int, default=10)
+    parser.add_argument("--save-strategy", choices=("no", "steps", "epoch"), default="steps")
+    parser.add_argument("--save-steps", type=int, default=500)
+    parser.add_argument("--save-total-limit", type=int, default=2)
+    parser.add_argument("--save-only-model", action="store_true")
     parser.add_argument("--resume-from-checkpoint", default=None)
     args = parser.parse_args()
     if args.lambda_d < 0 or not 0 < args.alpha <= 1:
         parser.error("Set valid EIPD weights")
 
     set_seed(args.seed)
+    log_stage("loading Student checkpoint")
     config = AutoConfig.from_pretrained(args.model)
     if config.model_type != "qwen3_vl":
         raise ValueError("EIPD supports Qwen3-VL only")
@@ -365,6 +416,7 @@ def main():
         dtype=torch.bfloat16,
         attn_implementation="sdpa",
     )
+    log_stage("loading processor")
     processor_source = args.processor or args.model
     processor = AutoProcessor.from_pretrained(
         processor_source,
@@ -378,27 +430,53 @@ def main():
     model.config.use_cache = False
     for parameter in model.model.visual.parameters():
         parameter.requires_grad_(False)
-    model = get_peft_model(
-        model,
-        LoraConfig(
-            task_type=TaskType.CAUSAL_LM,
-            r=args.lora_r,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=0,
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ],
-        ),
+    teacher_model = None
+    if args.training_mode == "lora":
+        model = get_peft_model(
+            model,
+            LoraConfig(
+                task_type=TaskType.CAUSAL_LM,
+                r=args.lora_r,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=0,
+                target_modules=[
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                ],
+            ),
+        )
+        for name, parameter in model.named_parameters():
+            if "visual" in name:
+                parameter.requires_grad_(False)
+    else:
+        # Full Student updates cannot share parameters with an immutable Teacher.
+        # Keep one independent original checkpoint per distributed process.
+        log_stage("loading independent frozen Teacher checkpoint")
+        teacher_model = Qwen3VLForConditionalGeneration.from_pretrained(
+            args.model,
+            config=config,
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+        )
+        teacher_model.requires_grad_(False)
+        teacher_model.config.use_cache = False
+        teacher_model.eval()
+        log_stage("Student and Teacher checkpoints loaded")
+
+    gradient_checkpointing = (
+        args.training_mode == "full"
+        if args.gradient_checkpointing is None
+        else args.gradient_checkpointing
     )
-    for name, parameter in model.named_parameters():
-        if "visual" in name:
-            parameter.requires_grad_(False)
+    trainable_parameters = sum(
+        parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+    )
+    total_parameters = sum(parameter.numel() for parameter in model.parameters())
 
     training_args = TrainingArguments(
         output_dir=args.output,
@@ -408,15 +486,21 @@ def main():
         per_device_train_batch_size=1,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.lr,
+        weight_decay=args.weight_decay,
+        warmup_ratio=args.warmup_ratio,
+        lr_scheduler_type=args.lr_scheduler_type,
         bf16=True,
         remove_unused_columns=False,
-        logging_steps=10,
-        save_steps=500,
-        save_total_limit=2,
+        logging_steps=args.logging_steps,
+        save_strategy=args.save_strategy,
+        save_steps=args.save_steps,
+        save_total_limit=args.save_total_limit,
+        save_only_model=args.save_only_model,
         report_to="none",
         dataloader_num_workers=0,
         seed=args.seed,
-        gradient_checkpointing=False,
+        gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
@@ -424,6 +508,9 @@ def main():
         vars(args),
         method="EIPD-text-Qwen3VL",
         initialization="original-qwen3-vl",
+        teacher="independent-frozen-original" if teacher_model is not None else "adapter-disabled-original",
+        trainable_parameters=trainable_parameters,
+        total_parameters=total_parameters,
         eipd_manifest_sha256=hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest(),
         pytorch_version=torch.__version__,
         model_type=config.model_type,
@@ -431,17 +518,23 @@ def main():
     (output / "eipd_config.json").write_text(
         json.dumps(record, indent=2), encoding="utf-8"
     )
+    log_stage("loading 50K manifest")
+    train_dataset = ManifestDataset(args.manifest)
+    log_stage(f"manifest loaded: {len(train_dataset)} examples")
     trainer = EIPDTrainer(
         model=model,
         processor=processor,
         args=training_args,
-        train_dataset=ManifestDataset(args.manifest),
+        train_dataset=train_dataset,
         data_collator=collate,
         alpha=args.alpha,
         eipd_lambda=args.lambda_d,
         max_new_tokens=args.max_new_tokens,
         max_answer_tokens=args.max_answer_tokens,
+        teacher_model=teacher_model,
+        teacher_device=args.teacher_device,
     )
+    log_stage("Trainer initialized; preparing DeepSpeed engine")
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.save_model(str(output))
     processor.save_pretrained(str(output))
