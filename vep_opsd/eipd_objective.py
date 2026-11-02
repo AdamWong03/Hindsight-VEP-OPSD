@@ -15,7 +15,7 @@ def eipd_loss(student_logits: torch.Tensor,
               no_bridge_logits: torch.Tensor,
               bridge_logits: torch.Tensor,
               *, alpha: float = 0.5, max_weight: float = 4.0,
-              eps: float = 1e-8) -> EIPDResult:
+              eps: float = 1e-8, uniform: bool = False) -> EIPDResult:
     """All inputs are answer-token logits, shaped [T,V], aligned under teacher forcing.
 
     Teacher logits must be detached. KL(q||student) uses the *full* vocabulary;
@@ -36,7 +36,11 @@ def eipd_loss(student_logits: torch.Tensor,
         d0 = torch.where(p0 > 0, p0 * (p0.clamp_min(eps).log() - middle.clamp_min(eps).log()), 0).sum(-1)
         d1 = torch.where(p1 > 0, p1 * (p1.clamp_min(eps).log() - middle.clamp_min(eps).log()), 0).sum(-1)
         d = (0.5 * (d0 + d1)).clamp_min(0)
-        if d.sum() <= eps:
+        if uniform:
+            # Selection already happened upstream (only samples whose Bridge improved
+            # the gold likelihood), so every answer position is distilled equally.
+            weights = torch.ones_like(d)
+        elif d.sum() <= eps:
             weights = torch.zeros_like(d)
         else:
             # Capped proportional allocation. If fewer than T/max_weight

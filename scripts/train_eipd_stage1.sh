@@ -24,6 +24,7 @@
 #   --deepspeed FILE         [scripts/zero2.json]
 #   --gradient-checkpointing on|off  [on]
 #   --smoke-samples N        subset size [32]
+#   --single-view 1          run Past or Past+Bridge at random instead of both
 #   --batch-views 1          share one decode chain between the views. DISABLED by
 #                            default: batching changes bf16 kernel selection, which
 #                            drifts 2.7% per 4 latent steps, and the 16-step
@@ -48,7 +49,7 @@ esac
 vepopsd_parse_args "model eipd-root manifest features training-mode latent-steps lambda-v eta \
 nproc-per-node global-batch grad-accum-steps lr latent-lr epochs deepspeed workers cpu-threads \
 gradient-checkpointing smoke-samples image-max-pixels save-steps logging-steps resume output-dir \
-dry-run run-name nonfinite batch-views max-steps" "$@"
+dry-run run-name nonfinite batch-views max-steps single-view" "$@"
 
 # Absolute defaults, same policy as _env.sh: no discovery, override by env or flag.
 EIPD_ROOT="${EIPD_ROOT:-/nfs/ofs-llm-ssd/user/shengrenren_i/data/EIPD}"
@@ -153,7 +154,8 @@ args=(--model "${MODEL}" --eipd-root "${EIPD_ROOT}" --manifest "${MANIFEST}"
       --lr "${LR}" --latent-lr "${LATENT_LR}" --image-max-pixels "${IMAGE_MAX_PIXELS}"
       --dataloader-num-workers "${WORKERS}" --cpu-threads "${CPU_THREADS}"
       --save-steps "${SAVE_STEPS}" --logging-steps "${LOGGING_STEPS}"
-      --nonfinite "${NONFINITE:-skip}" --batch-views "${BATCH_VIEWS:-0}")
+      --nonfinite "${NONFINITE:-skip}" --batch-views "${BATCH_VIEWS:-0}" \
+      --single-view "${SINGLE_VIEW:-0}")
 case "${GRADIENT_CHECKPOINTING}" in
   on|true|1) args+=(--gradient-checkpointing) ;;
   off|false|0) args+=(--no-gradient-checkpointing) ;;

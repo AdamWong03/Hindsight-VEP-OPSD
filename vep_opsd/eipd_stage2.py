@@ -32,8 +32,8 @@ from transformers import (AutoProcessor, Qwen3VLForConditionalGeneration,
 
 from .eipd_future_targets import future_prediction_loss
 from .eipd_latent import LatentProjector, rollout_latents
-from .eipd_objective import eipd_loss
-from .eipd_stage1 import (LATENT_TOKENS, MemoryProbe, Stage1Dataset, answer_context,
+from .eipd_objective import EIPDResult, eipd_loss
+from .eipd_stage1 import (LATENT_TOKENS, Stage1Dataset, answer_context,
                           answer_scores, collate, encode_prompt, sync_module_device)
 from .trainer import drop_empty_param_groups, sync_scheduler_lambdas
 
@@ -75,7 +75,7 @@ def condition_logits(model, projector, processor, sample, *, steps: int, device,
 
 def stage2_loss(model, projector, value_projection, processor, sample, *,
                 steps: int, eta: float, lam_v: float, lam_d: float,
-                alpha: float) -> dict:
+                alpha: float, kd_mode: str = "js") -> dict:
     device = next(model.parameters()).device
     sync_module_device(projector, value_projection, device=device)
 
@@ -88,7 +88,21 @@ def stage2_loss(model, projector, value_projection, processor, sample, *,
         _, p_plus, _ = condition_logits(model, projector, processor, sample,
                                         steps=steps, device=device, use_bridge=True)
 
-    distill = eipd_loss(student_logits, p0, p_plus, alpha=alpha)
+    gain = _gold_gain(p0, p_plus, sample, processor.tokenizer,
+                      model.get_input_embeddings().weight.device)
+    if kd_mode == "gain":
+        # Only distil when the Bridge actually improved the teacher's likelihood of
+        # the gold answer. A large JS says the distribution moved, not that it moved
+        # towards the truth.
+        if float(gain) > 0:
+            distill = eipd_loss(student_logits, p0, p_plus, alpha=alpha, uniform=True)
+        else:
+            zero = torch.zeros((), device=student_logits.device,
+                               dtype=student_logits.dtype)
+            distill = EIPDResult(loss=zero, mean_js=zero, active_tokens=0,
+                                 normalized_weights=zero)
+    else:
+        distill = eipd_loss(student_logits, p0, p_plus, alpha=alpha)
 
     features = sample["features"].to(device)
     anchors = sample["anchors"].anchors
@@ -104,8 +118,8 @@ def stage2_loss(model, projector, value_projection, processor, sample, *,
         "bridge_active_tokens": torch.tensor(float(distill.active_tokens)),
         "state_loss": future["state_loss"].detach(),
         "temporal_loss": future["temporal_loss"].detach(),
-        "gold_logprob_gain": _gold_gain(p0, p_plus, sample, processor.tokenizer,
-                                        model.get_input_embeddings().weight.device),
+        "gold_logprob_gain": gain,
+        "kd_active": torch.tensor(float(distill.active_tokens)),
     }
 
 
@@ -131,7 +145,7 @@ def answer_ids(tokenizer, question: str, answer: str):
 class Stage2Trainer(Trainer):
     def __init__(self, *args, processor, projector, value_projection, steps, eta,
                  lam_v, lam_d, alpha, teacher_check_every: int = 50,
-                 nonfinite: str = "skip", **kwargs):
+                 nonfinite: str = "skip", kd_mode: str = "js", **kwargs):
         super().__init__(*args, processing_class=processor, **kwargs)
         self.processor = processor
         self.projector = projector
@@ -143,6 +157,7 @@ class Stage2Trainer(Trainer):
         self.alpha = alpha
         self.teacher_check_every = max(1, teacher_check_every)
         self.nonfinite = nonfinite
+        self.kd_mode = kd_mode
         self._micro = 0
         self._teacher_reference: torch.Tensor | None = None
 
@@ -152,10 +167,20 @@ class Stage2Trainer(Trainer):
         return optimizer
 
     def _teacher_probe(self, model, inputs):
-        """Logits of the frozen teacher must not move as the Student trains."""
+        """Logits of the frozen teacher must not move as the Student trains.
+
+        The probe must run on the *same* sample every time: comparing logits from
+        different samples measures the data, not the teacher.
+        """
         device = next(model.parameters()).device
+        if self._probe_inputs is None:
+            self._probe_inputs = {key: (value.detach().to("cpu") if torch.is_tensor(value)
+                                        else value)
+                                  for key, value in inputs.items()}
+        probe = {key: (value.to(device) if torch.is_tensor(value) else value)
+                 for key, value in self._probe_inputs.items()}
         with frozen_teacher(model):
-            _, logits, _ = condition_logits(model, self.projector, self.processor, inputs,
+            _, logits, _ = condition_logits(model, self.projector, self.processor, probe,
                                             steps=self.steps, device=device, use_bridge=True)
         logits = logits.detach().float().cpu()
         if self._teacher_reference is None:
@@ -179,7 +204,8 @@ class Stage2Trainer(Trainer):
         self._micro += 1
         parts = stage2_loss(model, self.projector, self.value_projection, self.processor,
                             inputs, steps=self.steps, eta=self.eta, lam_v=self.lam_v,
-                            lam_d=self.lam_d, alpha=self.alpha)
+                            lam_d=self.lam_d, alpha=self.alpha,
+                            kd_mode=self.kd_mode)
         if not torch.isfinite(parts["loss"]):
             self._skipped = getattr(self, "_skipped", 0) + 1
             self.log({"nonfinite_batch": 1.0, "nonfinite_total": float(self._skipped)})
@@ -261,6 +287,9 @@ def main() -> int:
     parser.add_argument("--teacher-check-every", type=int, default=50)
     parser.add_argument("--resume-from-checkpoint", default=None)
     parser.add_argument("--nonfinite", choices=("skip", "raise"), default="skip")
+    parser.add_argument("--kd-mode", choices=("js", "gain"), default="js",
+                        help="js = weight the KL by teacher disagreement; gain = only "
+                             "distil samples whose Bridge improved the gold likelihood")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -271,7 +300,12 @@ def main() -> int:
     features = Path(args.features or root / "future_features" / "train")
 
     stage1 = Path(args.stage1)
-    source = args.base_model or (str(stage1) if (stage1 / "config.json").is_file() else None)
+    # Stage 1 weights win: they are the teacher. --base-model is only the fallback
+    # for a LoRA Stage 1, which saves an adapter instead of a full checkpoint.
+    has_weights = (stage1 / "config.json").is_file() and any(
+        (stage1 / name).is_file() for name in
+        ("model.safetensors", "pytorch_model.bin", "model.safetensors.index.json"))
+    source = str(stage1) if has_weights else args.base_model
     if source is None:
         parser.error("Stage 1 wrote an adapter only; pass --base-model")
 
@@ -352,7 +386,7 @@ def main() -> int:
         data_collator=collate, projector=projector, value_projection=value_projection,
         steps=args.latent_steps, eta=args.eta, lam_v=args.lambda_v, lam_d=args.lambda_d,
         alpha=args.alpha, teacher_check_every=args.teacher_check_every,
-        nonfinite=args.nonfinite)
+        nonfinite=args.nonfinite, kd_mode=args.kd_mode)
     log_stage2("trainer ready")
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.save_model(str(output))

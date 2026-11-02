@@ -11,7 +11,8 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from vep_opsd.eipd_future_targets import assign_anchors, future_prediction_loss
+from vep_opsd.eipd_future_targets import (assign_anchors, future_prediction_loss,
+                                          select_future_frames)
 from vep_opsd.eipd_latent import (_cache_tensors, LatentProjector, bottleneck_answer_logits,
                                   prefill_only, reference_rollout, rollout_latents,
                                   rollout_latents_shared,
@@ -263,3 +264,38 @@ if __name__ == "__main__":
             print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
     print(f"\n{failures} failure(s)")
     sys.exit(1 if failures else 0)
+
+
+def test_select_future_frames_keeps_a_real_subset_covering_the_horizon():
+    """A short latent budget must not raise on samples with more future frames."""
+    native = [10, 20, 30, 40, 50, 60, 70]
+    kept = select_future_frames(native, 4)
+    assert len(kept) == 4
+    assert kept[-1] == native[-1], "the horizon must stay anchored to the last frame"
+    assert all(t in native for t in kept), "no interpolated or invented frames"
+    assert kept == select_future_frames(native, 4), "deterministic"
+    # fewer frames than the budget: keep them all
+    assert select_future_frames([5, 9], 4) == [5, 9]
+    # the anchors must still be valid for the reduced set
+    anchors = assign_anchors(1, kept, steps=4)
+    assert len(anchors.anchors) == 4 and anchors.anchors[-1] == 4
+
+
+def test_uniform_distillation_weights_every_position_equally():
+    """--kd-mode gain drops the JS weighting, so no position may be up-weighted."""
+    from vep_opsd.eipd_objective import eipd_loss
+    torch.manual_seed(7)
+    tokens, vocab = 5, 11
+    student = torch.randn(tokens, vocab)
+    p0, p1 = torch.randn(tokens, vocab), torch.randn(tokens, vocab)
+    p1[0] *= 30.0                       # one position disagrees strongly
+    weighted = eipd_loss(student, p0, p1, alpha=0.5)
+    uniform = eipd_loss(student, p0, p1, alpha=0.5, uniform=True)
+    assert torch.allclose(uniform.normalized_weights,
+                          torch.ones(tokens), atol=1e-6)
+    # with equal weights the loss is the plain mean KL over the answer span
+    import torch.nn.functional as F
+    q = 0.5 * F.softmax(p0, -1) + 0.5 * F.softmax(p1, -1)
+    expected = (q * (q.log() - F.log_softmax(student, -1))).sum(-1).mean()
+    assert torch.allclose(uniform.loss, expected, atol=1e-5), (uniform.loss, expected)
+    assert not torch.allclose(weighted.loss, uniform.loss)

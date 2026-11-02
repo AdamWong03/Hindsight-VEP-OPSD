@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import random
 import json
 import os
 import sys
@@ -28,7 +29,8 @@ from torch.utils.data import Dataset
 from transformers import (AutoProcessor, Qwen3VLForConditionalGeneration,
                           Trainer, TrainingArguments, set_seed)
 
-from .eipd_future_targets import assign_anchors, future_prediction_loss
+from .eipd_future_targets import (assign_anchors, future_prediction_loss,
+                                  select_future_frames)
 from .eipd_latent import (LatentProjector, LatentTrajectory, bottleneck_answer_logits,
                           prefill_only, rollout_latents_shared)
 from .trainer import drop_empty_param_groups, sync_scheduler_lambdas
@@ -99,13 +101,18 @@ class Stage1Dataset(Dataset):
                 return image.convert("RGB").copy()
 
         cache = self.store.get(row["sample_id"])
-        anchors = assign_anchors(max(row["past_native_indices"]), row["future_native_indices"],
-                                 steps=self.steps)
+        features = cache["features"]                     # (m, d) fp32, L2-normalised
+        native = list(row["future_native_indices"])
+        past_end = max(row["past_native_indices"])
+        kept = select_future_frames(native, self.steps)
+        if len(kept) != len(native):
+            features = features[[native.index(t) for t in kept]]
+        anchors = assign_anchors(past_end, kept, steps=self.steps)
         return {
             "row": row,
             "observed": [load(x) for x in row["past_files"]],
             "bridge": load(row["bridge_file"]),
-            "features": cache["features"],          # (m, d) fp32, L2-normalised
+            "features": features,
             "anchors": anchors,
         }
 
@@ -196,7 +203,7 @@ def answer_ce(model, tokenizer, question, answer, latents, device) -> torch.Tens
 # --------------------------------------------------------------------------- step
 def stage1_loss(model, projector, value_projection, processor, tokenizer, sample,
                 *, steps: int, eta: float, lam_v: float, batch_views: bool = True,
-                prefill_checkpoint: bool = True) -> dict:
+                prefill_checkpoint: bool = True, single_view: bool = False) -> dict:
     device = next(model.parameters()).device
     sync_module_device(projector, value_projection, device=device)
     row = sample["row"]
@@ -205,8 +212,19 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
     backbone = model.get_base_model() if hasattr(model, "get_base_model") else model
     backbone = getattr(backbone, "model", backbone)
 
+    # Which views to run. Running both costs two prefills and two answer passes per
+    # sample; sampling one at random has the same expectation (and halves the work),
+    # at the price of a noisier gradient. The future loss only applies to past-only
+    # views, so it is scaled by two to keep E[L] == (CE_p + CE_+)/2 + lam_v * future.
+    if single_view:
+        use_bridge = random.random() < 0.5
+        views = [bridge] if use_bridge else [None]
+    else:
+        use_bridge = True
+        views = [None, bridge]
+
     prefills = []
-    for bridge_image in (None, bridge):
+    for bridge_image in views:
         batch, start = encode_prompt(backbone, processor, observed, row["question"],
                                      bridge_image, device)
         prefills.append({
@@ -216,6 +234,7 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
             "image_grid_thw": batch.get("image_grid_thw"),
             "start": start,
         })
+
     def seed(item):
         prefill = {key: item[key] for key in
                    ("input_ids", "attention_mask", "pixel_values", "image_grid_thw")
@@ -223,10 +242,7 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
         return prefill_only(model, projector, prefill, item["start"],
                             checkpoint=prefill_checkpoint)
 
-    if batch_views:
-        # One decode chain for both views: the 8B weights are streamed once per step
-        # instead of once per view. Prefills stay sequential so only one prompt's
-        # activations are live, and with checkpointing they are not kept at all.
+    if batch_views and len(prefills) > 1:
         latents = rollout_latents_shared(model, projector, [seed(i) for i in prefills],
                                         steps=steps)
     else:
@@ -234,9 +250,17 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
             rollout_latents_shared(model, projector, [seed(item)], steps=steps)[0]
             for item in prefills
         ])
-    ce_past = answer_ce(model, tokenizer, row["question"], row["answer"], latents[0], device)
-    ce_bridge = answer_ce(model, tokenizer, row["question"], row["answer"], latents[1], device)
-    traj_past = LatentTrajectory(latents[0], [])
+
+    ces = [answer_ce(model, tokenizer, row["question"], row["answer"], latent, device)
+           for latent in latents]
+    if single_view:
+        ce_loss = ces[0]
+        future_weight = 0.0 if use_bridge else 2.0 * lam_v
+        traj_past = LatentTrajectory(latents[0], [])
+    else:
+        ce_loss = 0.5 * (ces[0] + ces[1])
+        future_weight = lam_v
+        traj_past = LatentTrajectory(latents[0], [])
 
     features = sample["features"].to(device)
     anchors = sample["anchors"].anchors
@@ -244,11 +268,17 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
         raise RuntimeError("anchor/target mismatch")
     picked = torch.stack([traj_past.latents[k - 1] for k in anchors])
     predicted = value_projection(picked)
-    future = future_prediction_loss(predicted, features, eta=eta)
+    if future_weight > 0:
+        future = future_prediction_loss(predicted, features, eta=eta)
+    else:
+        zero = torch.zeros((), device=device, dtype=predicted.dtype)
+        future = {"loss": zero, "state_loss": zero, "temporal_loss": zero}
 
-    total = 0.5 * (ce_past + ce_bridge) + lam_v * future["loss"]
+    total = ce_loss + future_weight * future["loss"]
     return {"loss": total,
-            "ce_past": ce_past.detach(), "ce_bridge": ce_bridge.detach(),
+            "ce_past": ces[0].detach(),
+            "ce_bridge": ces[-1].detach() if use_bridge and len(ces) > 1 else torch.zeros_like(ces[0].detach()),
+            "view_bridge": torch.tensor(float(use_bridge)),
             "state_loss": future["state_loss"].detach(),
             "temporal_loss": future["temporal_loss"].detach(),
             "anchors": torch.tensor(float(len(anchors))),
@@ -258,7 +288,8 @@ def stage1_loss(model, projector, value_projection, processor, tokenizer, sample
 class Stage1Trainer(Trainer):
     def __init__(self, *args, processor, projector, value_projection, steps, eta, lam_v,
                  latent_lr: float = 0.0, nonfinite: str = "skip",
-                 batch_views: bool = True, prefill_checkpoint: bool = True, **kwargs):
+                 batch_views: bool = True, prefill_checkpoint: bool = True,
+                 single_view: bool = False, **kwargs):
         super().__init__(*args, processing_class=processor, **kwargs)
         self.processor = processor
         self.projector = projector
@@ -269,6 +300,7 @@ class Stage1Trainer(Trainer):
         self.latent_lr = float(latent_lr or 0.0)
         self.batch_views = bool(batch_views)
         self.prefill_checkpoint = bool(prefill_checkpoint)
+        self.single_view = bool(single_view)
         self.nonfinite = nonfinite
         self._skipped = 0
 
@@ -350,6 +382,9 @@ def main() -> int:
     parser.add_argument("--save-only-model", action="store_true")
     parser.add_argument("--resume-from-checkpoint", default=None)
     parser.add_argument("--nonfinite", choices=("skip", "raise"), default="skip")
+    parser.add_argument("--single-view", type=int, default=0,
+                        help="1 = run Past or Past+Bridge at random (same expectation, "
+                             "half the work, noisier gradients)")
     parser.add_argument("--prefill-checkpoint", type=int, default=1,
                         help="1 = recompute each multimodal prefill during backward "
                              "(frees ~14 GiB per view, costs one extra prefill forward)")
@@ -442,7 +477,8 @@ def main() -> int:
         steps=args.latent_steps, eta=args.eta, lam_v=args.lambda_v,
         latent_lr=args.latent_lr, nonfinite=args.nonfinite,
         batch_views=bool(args.batch_views),
-        prefill_checkpoint=bool(args.prefill_checkpoint))
+        prefill_checkpoint=bool(args.prefill_checkpoint),
+        single_view=bool(args.single_view))
     log_stage("trainer ready")
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.save_model(str(output))

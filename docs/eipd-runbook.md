@@ -51,6 +51,27 @@ outputs: /nfs/ofs-llm-ssd/user/shengrenren_i/outputs/eipd
 | prefill 检查点 | 开（省 28 GiB） | 开 |
 | 两视图共批 | **关**（见 §5） | 关 |
 
+## 2b. 短链配方（评审后的建议版本）
+
+依据：K=16 时最后一个锚点恒为 `k=16`，而 m=1 占 69.4%，**平均只有 8.6% 的 latent 步
+拿到直接视觉监督**；K=4 时 m=1 样本的监督占比升到 25%，m=4 样本达到 100%。缩短链条
+不只是省算力，是让监督覆盖到计算。
+
+```bash
+# Stage 1：4 步 latent、单视图随机采样、无 temporal、2 epoch
+bash scripts/train_eipd_stage1.sh train --latent-steps 4 --eta 0 --epochs 2 --single-view 1
+
+# Stage 2：1 epoch、按 gold 似然增益选择蒸馏样本
+bash scripts/train_eipd_stage2.sh train --stage1 <stage1 目录> --latent-steps 4 --epochs 1 --kd-mode gain
+```
+
+| 开关 | 语义 |
+|---|---|
+| `--latent-steps 4` | 真实自回归 4 步（不是插入 4 个占位符）；m>K 时按时间均匀选帧，只用真实帧 |
+| `--single-view 1` | 每个样本随机跑 Past 或 Past+Bridge；future loss 对 past-only 样本乘 2 保持期望不变 |
+| `--eta 0` | 关闭 temporal 项（69.4% 样本该项恒为 0） |
+| `--kd-mode gain` | 仅当 Bridge 提高教师对 gold answer 的似然（g>0）才蒸馏，权重均匀，不再用 JS 加权 |
+
 ## 3. 实测性能（8×H800 80G）
 
 ```
@@ -88,6 +109,12 @@ decode 只跑到 HBM 峰值带宽的 ~40%，所以**时间基本由「步数 × 
 ## 5. 已知问题与取舍
 
 **两视图共批（`--batch-views 1`）已默认关闭。** 让 Past 与 Past+Bridge 共用一条 16 步 decode 链能把 rollout 从 1.25 s 降到 0.86 s（约 31%），但在 bf16 下改变 kernel 选择，每 4 步引入 2.7% 偏差；16 步递归放大后梯度出现 Inf，权重被污染，其后每个 batch 都是 NaN（实测 100/116 次非有限）。按规格"不改变算法"的要求，这条路径已删除。
+
+**Stage 2 起始权重必须以 Stage-1 checkpoint 为准。** `--base-model` 只是 LoRA Stage-1
+的兜底；早期版本里它会盖过 Stage-1 权重，导致冻结教师其实是原始基座，整阶段结论无效。已修。
+
+**teacher 漂移探针必须固定同一样本。** 早期版本每次拿当前微批去比，测到的是数据差异而不是
+教师漂移。已改为首个探针样本快照后反复使用。
 
 **`torch.profiler` 不要用。** `key_averages()` 在数十万 kernel 事件上会卡死；相关开关已移除。
 

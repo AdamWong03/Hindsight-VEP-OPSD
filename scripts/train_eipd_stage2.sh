@@ -22,6 +22,8 @@
 #   --epochs F               [2]
 #   --deepspeed FILE         [scripts/zero2.json]
 #   --teacher-check-every N  teacher logits invariant every N micro-steps [50]
+#   --kd-mode gain|js        gain = only distil samples whose Bridge improved the gold
+#                            likelihood (paper option); js = weight by disagreement
 #   --dry-run 1              print the command, run nothing
 set -euo pipefail
 
@@ -42,7 +44,7 @@ esac
 vepopsd_parse_args "stage1 base-model eipd-root manifest features latent-steps lambda-v \
 lambda-d eta alpha nproc-per-node global-batch grad-accum-steps lr epochs deepspeed workers \
 cpu-threads gradient-checkpointing smoke-samples image-max-pixels save-steps logging-steps \
-teacher-check-every resume output-dir dry-run" "$@"
+teacher-check-every resume output-dir dry-run nonfinite kd-mode" "$@"
 
 EIPD_ROOT="${EIPD_ROOT:-/nfs/ofs-llm-ssd/user/shengrenren_i/data/EIPD}"
 MANIFEST="${MANIFEST:-${EIPD_ROOT}/train.jsonl}"
@@ -109,7 +111,8 @@ args=(--stage1 "${STAGE1}" --eipd-root "${EIPD_ROOT}" --manifest "${MANIFEST}"
       --gradient-accumulation-steps "${GRAD_ACCUM_STEPS}" --lr "${LR}"
       --image-max-pixels "${IMAGE_MAX_PIXELS}" --dataloader-num-workers "${WORKERS}"
       --cpu-threads "${CPU_THREADS}" --save-steps "${SAVE_STEPS}"
-      --logging-steps "${LOGGING_STEPS}" --teacher-check-every "${TEACHER_CHECK_EVERY}")
+      --logging-steps "${LOGGING_STEPS}" --teacher-check-every "${TEACHER_CHECK_EVERY}"
+      --kd-mode "${KD_MODE:-js}")
 [[ -n "${BASE_MODEL:-}" ]] && args+=(--base-model "${BASE_MODEL}")
 case "${GRADIENT_CHECKPOINTING}" in
   on|true|1) args+=(--gradient-checkpointing) ;;

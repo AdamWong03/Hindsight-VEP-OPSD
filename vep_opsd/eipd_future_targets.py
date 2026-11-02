@@ -27,6 +27,24 @@ class AnchorAssignment:
     total: int
 
 
+def select_future_frames(future_indices: list[int], steps: int) -> list[int]:
+    """Keep at most `steps` future frames, evenly spaced over time, last one always.
+
+    Needed once the latent budget drops below the number of supervised frames (the
+    data has m up to 7). Selection is deterministic and never invents a frame: the
+    kept indices are a subset of the real ones, so no interpolated target is used.
+    """
+    future = list(future_indices)
+    if len(future) <= steps:
+        return future
+    if steps == 1:
+        return [future[-1]]
+    last = len(future) - 1
+    keep = sorted({int(i * last / (steps - 1) + 0.5) for i in range(steps)})
+    keep[-1] = last
+    return [future[i] for i in keep]
+
+
 def assign_anchors(past_end: int, future_indices: Sequence[int], *, steps: int = 16
                    ) -> AnchorAssignment:
     """Map future frame positions onto latent indices in 1..steps.
