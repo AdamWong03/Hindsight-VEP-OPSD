@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sqlite3
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -443,6 +444,11 @@ def verify(args):
                 raise RuntimeError(f"Corrupt or replaced Bridge: {bridge}")
             check["images"]+=1
             check[split]+=1
+            if check[split] % 2000 == 0:
+                # Long single-threaded hash pass over ~100 GB of frames; without a
+                # heartbeat a progress watcher cannot tell I/O wait from a hang.
+                print(f"verify: {split} {check[split]} samples, {check['images']} images",
+                      file=sys.stderr, flush=True)
     return {"verified":dict(check),"source_unique":len(seen),"status":"structure verified; semantic audit pending"}
 
 def panda_subset(args):

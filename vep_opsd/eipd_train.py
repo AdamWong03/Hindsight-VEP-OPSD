@@ -27,6 +27,8 @@ from transformers import (
     AutoConfig,
     AutoProcessor,
     Qwen3VLForConditionalGeneration,
+    StoppingCriteria,
+    StoppingCriteriaList,
     Trainer,
     TrainingArguments,
     set_seed,
@@ -34,6 +36,29 @@ from transformers import (
 
 from .eipd_objective import eipd_loss
 from .trainer import drop_empty_param_groups, sync_scheduler_lambdas
+
+
+class StopAfterAnswer(StoppingCriteria):
+    """Halt rollout once the sample reaches its own <answer> boundary.
+
+    Everything the student writes after that marker is discarded anyway: the
+    trainer keeps the prefix up to and including <answer> and teacher-forces the
+    dataset Gold Answer from there. Stopping early therefore leaves the sampled
+    reasoning prefix bit-identical and only removes tokens that were thrown away.
+    """
+
+    def __init__(self, tokenizer, prompt_length: int, marker: str = "<answer>",
+                 window: int = 12):
+        self.tokenizer = tokenizer
+        self.prompt_length = prompt_length
+        self.marker = marker
+        self.window = window
+
+    def __call__(self, input_ids, scores, **kwargs) -> bool:
+        tail = input_ids[0, self.prompt_length:][-self.window:]
+        if tail.numel() < 2:
+            return False
+        return self.marker in self.tokenizer.decode(tail, skip_special_tokens=False)
 
 
 def log_stage(message: str):
@@ -217,6 +242,7 @@ class EIPDTrainer(Trainer):
         max_answer_tokens: int = 128,
         teacher_model=None,
         teacher_device: str | None = None,
+        stop_at_answer: bool = True,
         **kwargs,
     ):
         super().__init__(*args, processing_class=processor, **kwargs)
@@ -225,6 +251,7 @@ class EIPDTrainer(Trainer):
         self.eipd_lambda = eipd_lambda
         self.max_new_tokens = max_new_tokens
         self.max_answer_tokens = max_answer_tokens
+        self.stop_at_answer = stop_at_answer
         self.teacher_model = teacher_model
         if self.teacher_model is not None:
             target = torch.device(teacher_device) if teacher_device else self.accelerator.device
@@ -281,6 +308,10 @@ class EIPDTrainer(Trainer):
         base_model.config.use_cache = True
         try:
             with torch.no_grad():
+                stopping = None
+                if self.stop_at_answer:
+                    stopping = StoppingCriteriaList([StopAfterAnswer(
+                        tokenizer, student_prompt["input_ids"].shape[1])])
                 generated = base_model.generate(
                     **student_prompt,
                     do_sample=True,
@@ -290,15 +321,24 @@ class EIPDTrainer(Trainer):
                     use_cache=True,
                     pad_token_id=tokenizer.pad_token_id,
                     synced_gpus=self.args.world_size > 1,
+                    stopping_criteria=stopping,
                 )
         finally:
             base_model.config.use_cache = old_cache
             base_model.train(was_training)
 
         sampled_ids = generated[0, student_prompt["input_ids"].shape[1] :].tolist()
+        # Rollout length is the dominant per-step cost (~52-57 ms/token on A6000)
+        # and it is invisible in the current metrics; log it so early stopping and
+        # max_new_tokens changes can be judged against real numbers.
+        self.log({"rollout_tokens": float(len(sampled_ids)),
+                  "rollout_hit_cap": float(len(sampled_ids) >= self.max_new_tokens)})
         gold = self._gold_ids(row, device)
         try:
             reasoning_ids = answer_prefix_ids(tokenizer, sampled_ids)
+            # Everything after <answer> is replaced by the Gold Answer, so this is
+            # the whole sampled prefix the Student and both Teachers replay.
+            self.log({"reasoning_tokens": float(len(reasoning_ids))})
         except ValueError:
             # Malformed on-policy samples receive direct Gold supervision, but
             # are not silently converted into an off-policy EIPD example.
@@ -367,6 +407,15 @@ def main():
     )
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--weight-decay", type=float, default=0.1)
+    parser.add_argument(
+        "--adam-beta1", type=float, default=0.9, help="Future-L1 SFT convention"
+    )
+    parser.add_argument(
+        "--adam-beta2",
+        type=float,
+        default=0.95,
+        help="Future-L1 SFT uses 0.95 (transformers default is 0.999)",
+    )
     parser.add_argument("--warmup-ratio", type=float, default=0.1)
     parser.add_argument("--lr-scheduler-type", default="cosine")
     parser.add_argument("--epochs", type=float, default=1.0)
@@ -379,6 +428,19 @@ def main():
         "--teacher-device",
         default=None,
         help="Optional device for the independent full-FT Teacher (for example cuda:1)",
+    )
+    parser.add_argument(
+        "--stop-at-answer",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="End the rollout at <answer>; later sampled tokens are discarded anyway",
+    )
+    parser.add_argument(
+        "--attn-implementation",
+        choices=("sdpa", "flash_attention_2"),
+        default="sdpa",
+        help="sdpa needs no extra wheel; flash_attention_2 is faster and lighter "
+        "when flash-attn is installed on the training node",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lambda-d", type=float, default=0.2)
@@ -397,10 +459,23 @@ def main():
     parser.add_argument("--save-total-limit", type=int, default=2)
     parser.add_argument("--save-only-model", action="store_true")
     parser.add_argument("--resume-from-checkpoint", default=None)
+    parser.add_argument(
+        "--dataloader-num-workers",
+        type=int,
+        default=0,
+        help="PNG decode and image preprocessing can move off the main process",
+    )
+    parser.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=4,
+        help="torch CPU threads; the 64-thread default makes image preprocessing ~5x slower",
+    )
     args = parser.parse_args()
     if args.lambda_d < 0 or not 0 < args.alpha <= 1:
         parser.error("Set valid EIPD weights")
 
+    torch.set_num_threads(max(1, args.cpu_threads))
     set_seed(args.seed)
     log_stage("loading Student checkpoint")
     config = AutoConfig.from_pretrained(args.model)
@@ -414,7 +489,7 @@ def main():
         args.model,
         config=config,
         dtype=torch.bfloat16,
-        attn_implementation="sdpa",
+        attn_implementation=args.attn_implementation,
     )
     log_stage("loading processor")
     processor_source = args.processor or args.model
@@ -461,7 +536,7 @@ def main():
             args.model,
             config=config,
             dtype=torch.bfloat16,
-            attn_implementation="sdpa",
+            attn_implementation=args.attn_implementation,
         )
         teacher_model.requires_grad_(False)
         teacher_model.config.use_cache = False
@@ -487,6 +562,8 @@ def main():
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.lr,
         weight_decay=args.weight_decay,
+        adam_beta1=args.adam_beta1,
+        adam_beta2=args.adam_beta2,
         warmup_ratio=args.warmup_ratio,
         lr_scheduler_type=args.lr_scheduler_type,
         bf16=True,
@@ -497,7 +574,8 @@ def main():
         save_total_limit=args.save_total_limit,
         save_only_model=args.save_only_model,
         report_to="none",
-        dataloader_num_workers=0,
+        dataloader_num_workers=args.dataloader_num_workers,
+        dataloader_persistent_workers=args.dataloader_num_workers > 0,
         seed=args.seed,
         gradient_checkpointing=gradient_checkpointing,
         gradient_checkpointing_kwargs={"use_reentrant": False},
@@ -533,6 +611,7 @@ def main():
         max_answer_tokens=args.max_answer_tokens,
         teacher_model=teacher_model,
         teacher_device=args.teacher_device,
+        stop_at_answer=args.stop_at_answer,
     )
     log_stage("Trainer initialized; preparing DeepSpeed engine")
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
