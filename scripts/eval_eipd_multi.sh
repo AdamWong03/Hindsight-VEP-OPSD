@@ -26,6 +26,10 @@ for arg in "$@"; do
 done
 [[ -n "${CHECKPOINT}" ]] || { echo "usage: $0 --checkpoint DIR [other eval args]" >&2; exit 2; }
 
+# 每个分片是一个独立进程，各自把一份 8B 权重读进内存（约 17 GB）。
+# 容器内存吃紧时用 PARALLEL 限制同时在跑的进程数。
+PARALLEL="${PARALLEL:-0}"        # 0 = 全部并行
+
 if [[ -n "${GPUS:-}" ]]; then
   IFS=',' read -r -a DEVICES <<< "${GPUS}"
 else
@@ -42,23 +46,34 @@ echo "args       : $*"
 cd "${ROOT}"
 export PYTHONPATH="${ROOT}:${PYTHONPATH:-}"
 
-pids=()
+declare -a shard_pids=() shard_idx=() shard_log=()
 for index in "${!DEVICES[@]}"; do
   device="${DEVICES[index]}"
   log="${ROOT}/logs/eval-$(basename "${CHECKPOINT}")-shard${index}.log"
+  if (( PARALLEL > 0 )); then
+    while (( $(jobs -rp | wc -l) >= PARALLEL )); do wait -n || true; done
+  fi
   CUDA_VISIBLE_DEVICES="${device}" "${PY}" -m vep_opsd.eipd_eval \
     --eipd-root "${EIPD_ROOT}" --base-model "${MODEL}" \
     --shard-index "${index}" --shard-count "${COUNT}" "$@" > "${log}" 2>&1 &
-  pids+=($!)
-  echo "  gpu ${device} -> 分片 ${index}/${COUNT}  pid ${pids[-1]}  log ${log}"
+  shard_pids+=($!)
+  shard_idx+=("${index}")
+  shard_log+=("${log}")
+  echo "  gpu ${device} -> 分片 ${index}/${COUNT}  pid ${shard_pids[-1]}  log ${log}"
 done
 
-failed=0
-for pid in "${pids[@]}"; do
-  wait "${pid}" || failed=$((failed + 1))
+declare -a failed_shards=()
+for position in "${!shard_pids[@]}"; do
+  if ! wait "${shard_pids[position]}"; then
+    failed_shards+=("${position}")
+  fi
 done
-if (( failed > 0 )); then
-  echo "${failed}/${COUNT} 个分片失败，查看 logs/eval-*.log" >&2
+if (( ${#failed_shards[@]} > 0 )); then
+  echo "=== ${#failed_shards[@]}/${COUNT} 个分片失败 ===" >&2
+  for position in "${failed_shards[@]}"; do
+    echo "--- 分片 ${shard_idx[position]} (gpu ${DEVICES[position]}) 尾部:" >&2
+    tail -n 12 "${shard_log[position]}" >&2 || true
+  done
   exit 1
 fi
 
