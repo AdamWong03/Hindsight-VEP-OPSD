@@ -325,13 +325,18 @@ def prefill_only(model, projector: "LatentProjector", prefill_kwargs: dict,
     positions = kwargs.pop("cache_position", torch.arange(length, device=device))
 
     def run(input_ids=None, attention_mask=None, pixel_values=None, image_grid_thw=None):
-        cache = DynamicCache()
-        out = core(input_ids=input_ids, attention_mask=attention_mask,
-                   pixel_values=pixel_values, image_grid_thw=image_grid_thw,
-                   cache_position=positions, past_key_values=cache,
-                   use_cache=True, return_dict=True)
-        keys, values = _cache_tensors(cache)
-        return (out.last_hidden_state[:, -1:, :], *keys, *values)
+        # The outer checkpoint must see the exact same graph during its original
+        # forward and backward recomputation.  HF's per-layer checkpoint flag is
+        # normally restored before backward and would otherwise suppress the KV
+        # cache only during recomputation, producing a different tensor count.
+        with without_gradient_checkpointing(model):
+            cache = DynamicCache()
+            out = core(input_ids=input_ids, attention_mask=attention_mask,
+                       pixel_values=pixel_values, image_grid_thw=image_grid_thw,
+                       cache_position=positions, past_key_values=cache,
+                       use_cache=True, return_dict=True)
+            keys, values = _cache_tensors(cache)
+            return (out.last_hidden_state[:, -1:, :], *keys, *values)
 
     args = (kwargs["input_ids"], kwargs.get("attention_mask"),
             kwargs.get("pixel_values"), kwargs.get("image_grid_thw"))
