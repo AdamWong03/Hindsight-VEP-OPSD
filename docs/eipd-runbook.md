@@ -108,7 +108,18 @@ GPUS=0,1,2,3 bash scripts/eval_eipd_multi.sh ...   # 只用部分卡
 推理只走部署路径 `(Past, Q) → Z → answer`，不含 Bridge、未来帧或 gold 前缀，答案贪心解码，
 输出 exact match 与 token F1 到 `<checkpoint>/eval.json`。
 
-**三个数必须一起看**：正常 / zero / shuffle。若后两者几乎不掉，说明答案不是从 latent 来的
+**五个数必须一起看**：
+
+| 变体 | 回答的问题 |
+|---|---|
+| 默认 | 部署路径的基线 |
+| `--ablate zero` | Z 换成 0：答案还成立吗 |
+| `--ablate shuffle` | Z 换成别的样本：latent 里有样本特异信息吗 |
+| `--ablate past` | 过去帧换成别的样本：视频到底有没有被用 |
+| `--ablate black` | 过去帧换成纯黑：同上，排除内容差异 |
+
+首轮实测（5000 条验证集，K=4）：`none` exact 0.043 / F1 0.569；`zero` exact 0.043 / F1 0.570
+——**置零完全不影响**，说明答案没有经过 latent。若后两者几乎不掉，说明答案不是从 latent 来的
 （Beyond Visual Memory 报告过的捷径），此时 CE 再低也不能当作 latent 有效的证据。
 训练 CE 会塌到 0.04（K=16、3 epoch 实测），单看它无法区分"记住答案模板"和"预测未来事件"。
 

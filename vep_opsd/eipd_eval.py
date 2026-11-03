@@ -78,14 +78,20 @@ def load_model(checkpoint: str, device, base_model: str | None = None):
 
 
 # --------------------------------------------------------------------------- decode
-@torch.no_grad()
-def latent_states(model, projector, processor, row, eipd_root: Path, steps: int, device):
+def load_frames(eipd_root: Path, row) -> list:
     from PIL import Image
 
-    observed = []
+    frames = []
     for relative in row["past_files"]:
         with Image.open(eipd_root / relative) as image:
-            observed.append(image.convert("RGB").copy())
+            frames.append(image.convert("RGB").copy())
+    return frames
+
+
+@torch.no_grad()
+def latent_states(model, projector, processor, row, eipd_root: Path, steps: int, device,
+                  frames=None):
+    observed = load_frames(eipd_root, row) if frames is None else frames
     batch, start = encode_prompt(inner_model(model), processor, observed,
                                  row["question"], None, device)
     prefill = {key: batch[key] for key in
@@ -186,8 +192,8 @@ def merge_shards(directory: Path, tag: str) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", required=True,
-                        help="Stage 1 or Stage 2 output directory")
+    parser.add_argument("--checkpoint", default=None,
+                        help="Stage 1 or Stage 2 output directory (not needed with --merge)")
     parser.add_argument("--base-model", default=None,
                         help="only needed when the checkpoint stores an adapter")
     parser.add_argument("--eipd-root", default="/nfs/ofs-llm-ssd/user/shengrenren_i/data/EIPD")
@@ -195,7 +201,10 @@ def main(argv=None) -> int:
     parser.add_argument("--latent-steps", type=int, default=4)
     parser.add_argument("--limit", type=int, default=0, help="0 = all samples")
     parser.add_argument("--max-new-tokens", type=int, default=48)
-    parser.add_argument("--ablate", choices=("none", "zero", "shuffle"), default="none")
+    parser.add_argument("--ablate", default="none",
+                        choices=("none", "zero", "shuffle", "past", "black"),
+                        help="none: as deployed | zero: Z=0 | shuffle: another sample's Z | "
+                             "past: another sample's past frames | black: blank frames")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", default=None, help="per-sample JSON, default <ckpt>/eval.json")
     parser.add_argument("--shard-index", type=int, default=0,
@@ -211,6 +220,8 @@ def main(argv=None) -> int:
     tag = args.tag or f"{args.ablate}-k{args.latent_steps}"
     if args.merge:
         return merge_shards(Path(args.merge), tag)
+    if not args.checkpoint:
+        parser.error("--checkpoint is required unless --merge is used")
 
     root = Path(args.eipd_root).resolve()
     manifest = Path(args.manifest) if args.manifest else root / "val.jsonl"
@@ -238,8 +249,20 @@ def main(argv=None) -> int:
     cached: dict[int, torch.Tensor] = {}
 
     for index, row in enumerate(rows):
+        frames = None
+        if args.ablate in ("past", "black"):
+            if args.ablate == "past":
+                donor = donors[index]
+                if donor == index:
+                    donor = donors[(index + 1) % len(donors)]
+                frames = load_frames(root, rows[donor])
+            else:
+                from PIL import Image
+                frames = [Image.new("RGB", (1280, 720), (0, 0, 0))
+                          for _ in row["past_files"]]
+
         latents = latent_states(model, projector, processor, row, root,
-                                args.latent_steps, device)
+                                args.latent_steps, device, frames=frames)
         if args.ablate == "zero":
             latents = torch.zeros_like(latents)
         elif args.ablate == "shuffle":

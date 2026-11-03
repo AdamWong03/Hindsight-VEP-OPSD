@@ -84,4 +84,5 @@ for arg in "$@"; do
   [[ "${prev}" == "--latent-steps" ]] && K="${arg}"
   prev="${arg}"
 done
-"${PY}" -m vep_opsd.eipd_eval --merge "${CHECKPOINT}" --tag "${ABLATE}-k${K}"
+"${PY}" -m vep_opsd.eipd_eval --merge "${CHECKPOINT}" --checkpoint "${CHECKPOINT}" \
+    --tag "${ABLATE}-k${K}"
