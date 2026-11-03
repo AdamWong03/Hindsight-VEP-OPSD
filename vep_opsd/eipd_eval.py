@@ -27,7 +27,8 @@ from pathlib import Path
 import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
-from .eipd_latent import inner_model, prefill_only, rollout_latents_shared
+from .eipd_latent import (_mrope_positions, inner_model, prefill_only,
+                          rollout_latents_shared)
 from .eipd_stage1 import LATENT_TOKENS, encode_prompt
 
 EOS = ("<|im_end|>", "<|endoftext|>", "</answer>")
@@ -107,23 +108,32 @@ def answer(model, tokenizer, question: str, latents: torch.Tensor, device,
                         latents.to(device).view(1, -1, embed.weight.shape[1]),
                         embed(prompt[:, len(question_ids):])], dim=1)
 
-    out = model(inputs_embeds=inputs, use_cache=True, return_dict=True)
+    # Qwen3-VL derives the mrope positions from input_ids, which are absent here
+    # (we feed embeddings), so they must be supplied explicitly on every call.
+    length = inputs.shape[1]
+    out = model(inputs_embeds=inputs,
+                cache_position=torch.arange(length, device=device),
+                position_ids=_mrope_positions(0, length, device),
+                use_cache=True, return_dict=True)
     cache = out.past_key_values
-    position = inputs.shape[1]
+    position = length
     token = out.logits[:, -1:].argmax(-1)
     produced: list[int] = []
+    eos_id = tokenizer.eos_token_id
     for _ in range(max_new_tokens):
         produced.append(int(token))
         text = tokenizer.decode(produced, skip_special_tokens=True)
-        if any(marker in text for marker in EOS):
+        if produced[-1] == eos_id or any(marker in text for marker in EOS):
             break
         out = model(inputs_embeds=embed(token), past_key_values=cache,
                     cache_position=torch.tensor([position], device=device),
-                    position_ids=torch.tensor([[position]], device=device).expand(3, 1, 1),
+                    position_ids=_mrope_positions(position, 1, device),
                     use_cache=True, return_dict=True)
         cache, position = out.past_key_values, position + 1
         token = out.logits[:, -1:].argmax(-1)
-    return tokenizer.decode(produced, skip_special_tokens=True)
+    text = tokenizer.decode(produced, skip_special_tokens=True)
+    # the model is trained to close with </answer>; the gold span has no tags
+    return text.split("</answer>")[0].strip()
 
 
 # --------------------------------------------------------------------------- metrics
