@@ -97,7 +97,12 @@ decode 只跑到 HBM 峰值带宽的 ~40%，所以**时间基本由「步数 × 
 bash scripts/eval_eipd.sh --checkpoint <stage1 或 stage2 目录>
 bash scripts/eval_eipd.sh --checkpoint DIR --ablate zero      # Z := 0
 bash scripts/eval_eipd.sh --checkpoint DIR --ablate shuffle   # 换成别的样本的 Z
-bash scripts/eval_eipd.sh --checkpoint DIR --limit 200        # 先小批验证
+bash scripts/eval_eipd.sh --checkpoint DIR --limit 200        # 单卡小批验证
+
+# 多卡分片（5000 条验证集在 8 卡上约 15–20 分钟一组）
+bash scripts/eval_eipd_multi.sh --checkpoint DIR --latent-steps 4
+bash scripts/eval_eipd_multi.sh --checkpoint DIR --latent-steps 4 --ablate zero
+GPUS=0,1,2,3 bash scripts/eval_eipd_multi.sh ...   # 只用部分卡
 ```
 
 推理只走部署路径 `(Past, Q) → Z → answer`，不含 Bridge、未来帧或 gold 前缀，答案贪心解码，

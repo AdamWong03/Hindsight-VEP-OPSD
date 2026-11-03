@@ -152,6 +152,28 @@ def token_f1(prediction: str, gold: str) -> float:
 
 
 # --------------------------------------------------------------------------- main
+def merge_shards(directory: Path) -> int:
+    """Combine per-shard eval files into eval.json and print the aggregate."""
+    files = sorted(directory.glob("eval.shard-*.json"))
+    if not files:
+        raise SystemExit(f"no shard files under {directory}")
+    samples, summary = [], {}
+    for path in files:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        samples.extend(payload["samples"])
+        summary = payload["summary"]           # identical across shards
+    exact = sum(sample["exact"] for sample in samples) / len(samples)
+    f1 = sum(sample["f1"] for sample in samples) / len(samples)
+    merged = {**summary, "samples": len(samples), "exact_match": exact,
+              "token_f1": f1, "shards": len(files)}
+    (directory / "eval.json").write_text(
+        json.dumps({"summary": merged, "samples": samples}, indent=2,
+                   ensure_ascii=False), encoding="utf-8")
+    log(f"merged {len(files)} shards: {len(samples)} samples "
+        f"exact_match={exact:.4f} token_f1={f1:.4f}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True,
@@ -166,7 +188,15 @@ def main(argv=None) -> int:
     parser.add_argument("--ablate", choices=("none", "zero", "shuffle"), default="none")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", default=None, help="per-sample JSON, default <ckpt>/eval.json")
+    parser.add_argument("--shard-index", type=int, default=0,
+                        help="evaluate rows[index::count]; one process per GPU")
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--merge", default=None,
+                        help="merge the shard files under this directory and exit")
     args = parser.parse_args(argv)
+
+    if args.merge:
+        return merge_shards(Path(args.merge))
 
     root = Path(args.eipd_root).resolve()
     manifest = Path(args.manifest) if args.manifest else root / "val.jsonl"
@@ -174,6 +204,9 @@ def main(argv=None) -> int:
             manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
     if args.limit:
         rows = rows[:args.limit]
+    if args.shard_count > 1:
+        rows = rows[args.shard_index::args.shard_count]
+        log(f"shard {args.shard_index}/{args.shard_count}: {len(rows)} samples")
     if not rows:
         raise SystemExit("empty manifest")
 
@@ -222,7 +255,13 @@ def main(argv=None) -> int:
     log(f"exact_match={summary['exact_match']:.4f} token_f1={summary['token_f1']:.4f} "
         f"({len(results)} samples, ablate={args.ablate})")
 
-    output = Path(args.output) if args.output else Path(args.checkpoint) / "eval.json"
+    if args.output:
+        output = Path(args.output)
+    elif args.shard_count > 1:
+        output = (Path(args.checkpoint) /
+                  f"eval.shard-{args.shard_index}-of-{args.shard_count}.json")
+    else:
+        output = Path(args.checkpoint) / "eval.json"
     output.write_text(json.dumps({"summary": summary, "samples": results},
                                  indent=2, ensure_ascii=False), encoding="utf-8")
     log(f"wrote {output}")
