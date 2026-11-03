@@ -55,6 +55,14 @@ def test_advantage_mask_can_zero_the_routed_gradient():
     assert torch.equal(upstream.grad, torch.zeros_like(upstream))
 
 
+def test_empty_decoded_completion_is_not_valid_for_kd():
+    for text, expected in (("", False), ("   ", False), ("</answer>", False),
+                           ("Yes", True), ("The person moves.", True)):
+        # Training applies this check after decode_answer has removed </answer>.
+        decoded = text.split("</answer>", 1)[0].strip()
+        assert any(character.isalnum() for character in decoded) is expected
+
+
 def test_answer_logits_align_one_row_per_response_token():
     from transformers import Qwen3VLConfig, Qwen3VLForConditionalGeneration
 

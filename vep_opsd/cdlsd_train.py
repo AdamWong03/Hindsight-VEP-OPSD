@@ -155,6 +155,13 @@ class CDLSDTrainer(Trainer):
                 max_new_tokens=self.max_new_tokens, temperature=self.temperature,
                 top_p=self.top_p,
             )
+        sampled_text = decode_answer(self.processor.tokenizer, sampled.detach().cpu())
+        valid_completion = torch.tensor(
+            float(any(character.isalnum() for character in sampled_text)),
+            device=device,
+            dtype=torch.float32,
+        )
+        kd_mask = advantage * valid_completion
         student_logits = answer_logits(
             model, self.processor.tokenizer, row["question"], states.short, sampled)
         with torch.no_grad():
@@ -163,7 +170,7 @@ class CDLSDTrainer(Trainer):
         kd, per_token = forward_kl(
             teacher_logits, student_logits, token_clip=self.token_clip)
         del teacher_logits, student_logits
-        routed = route_kd_through_states(kd * advantage, states.short)
+        routed = route_kd_through_states(kd * kd_mask, states.short)
         total = supervised + self.lambda_kd * routed.routed
 
         quantiles = torch.quantile(
@@ -175,8 +182,10 @@ class CDLSDTrainer(Trainer):
             "ce_long": ce8.detach(),
             "ce_gap": (ce4 - ce8).detach(),
             "teacher_advantage": advantage.detach(),
+            "completion_valid": valid_completion.detach(),
+            "kd_active": kd_mask.detach(),
             "kd_value": kd.detach(),
-            "kd_active_value": (kd.detach() * advantage),
+            "kd_active_value": (kd.detach() * kd_mask),
             "kd_state_grad_norm": routed.state_grad_norm,
             "kd_token_p50": quantiles[0],
             "kd_token_p95": quantiles[1],
