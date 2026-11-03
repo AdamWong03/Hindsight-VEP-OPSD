@@ -160,6 +160,7 @@ class Stage2Trainer(Trainer):
         self.kd_mode = kd_mode
         self._micro = 0
         self._teacher_reference: torch.Tensor | None = None
+        self._probe_inputs: dict | None = None
 
     def create_optimizer(self):
         optimizer = super().create_optimizer()

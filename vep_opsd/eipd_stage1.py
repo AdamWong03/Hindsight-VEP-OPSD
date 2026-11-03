@@ -334,7 +334,8 @@ class Stage1Trainer(Trainer):
                             self.processor, self.processor.tokenizer, inputs,
                             steps=self.steps, eta=self.eta, lam_v=self.lam_v,
                             batch_views=self.batch_views,
-                            prefill_checkpoint=self.prefill_checkpoint)
+                            prefill_checkpoint=self.prefill_checkpoint,
+                            single_view=self.single_view)
         if not torch.isfinite(parts["loss"]):
             self._skipped += 1
             self.log({"nonfinite_batch": 1.0, "nonfinite_total": float(self._skipped)})
