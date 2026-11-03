@@ -3,6 +3,9 @@
 Evidence-Increment Predictive Distillation，纯连续 latent + 未来状态监督 + 证据增量自蒸馏。
 本文件只描述**当前可跑的路径**；旧的 text-token 版本保留在 `scripts/train_eipd.sh`（无 latent 的对照基线）。
 
+> **首轮结果（2026-11-03）：latent 未被使用。** K=4 与 K=16 两臂的答案准确率与「把问题当答案」
+> 的零成本基线相同（F1 0.5688 vs 0.5682），且 Z 置零后指标不变。详见 `docs/eipd-findings.md`。
+
 ## 0. 快速开始
 
 ```bash
