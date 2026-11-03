@@ -62,4 +62,11 @@ if (( failed > 0 )); then
   exit 1
 fi
 
-"${PY}" -m vep_opsd.eipd_eval --merge "${CHECKPOINT}"
+# 合并：从参数里取出 ablate / latent-steps 组成与分片一致的 tag
+ABLATE="none"; K="4"; prev=""
+for arg in "$@"; do
+  [[ "${prev}" == "--ablate" ]] && ABLATE="${arg}"
+  [[ "${prev}" == "--latent-steps" ]] && K="${arg}"
+  prev="${arg}"
+done
+"${PY}" -m vep_opsd.eipd_eval --merge "${CHECKPOINT}" --tag "${ABLATE}-k${K}"

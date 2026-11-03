@@ -152,11 +152,11 @@ def token_f1(prediction: str, gold: str) -> float:
 
 
 # --------------------------------------------------------------------------- main
-def merge_shards(directory: Path) -> int:
-    """Combine per-shard eval files into eval.json and print the aggregate."""
-    files = sorted(directory.glob("eval.shard-*.json"))
+def merge_shards(directory: Path, tag: str) -> int:
+    """Combine per-shard eval files into eval.<tag>.json and print the aggregate."""
+    files = sorted(directory.glob(f"eval.{tag}.shard-*.json"))
     if not files:
-        raise SystemExit(f"no shard files under {directory}")
+        raise SystemExit(f"no shard files for tag '{tag}' under {directory}")
     samples, summary = [], {}
     for path in files:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -166,7 +166,7 @@ def merge_shards(directory: Path) -> int:
     f1 = sum(sample["f1"] for sample in samples) / len(samples)
     merged = {**summary, "samples": len(samples), "exact_match": exact,
               "token_f1": f1, "shards": len(files)}
-    (directory / "eval.json").write_text(
+    (directory / f"eval.{tag}.json").write_text(
         json.dumps({"summary": merged, "samples": samples}, indent=2,
                    ensure_ascii=False), encoding="utf-8")
     log(f"merged {len(files)} shards: {len(samples)} samples "
@@ -191,12 +191,16 @@ def main(argv=None) -> int:
     parser.add_argument("--shard-index", type=int, default=0,
                         help="evaluate rows[index::count]; one process per GPU")
     parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--tag", default=None,
+                        help="filename tag, defaults to <ablate>-k<latent-steps>; "
+                             "keeps several ablations in one checkpoint directory")
     parser.add_argument("--merge", default=None,
                         help="merge the shard files under this directory and exit")
     args = parser.parse_args(argv)
 
+    tag = args.tag or f"{args.ablate}-k{args.latent_steps}"
     if args.merge:
-        return merge_shards(Path(args.merge))
+        return merge_shards(Path(args.merge), tag)
 
     root = Path(args.eipd_root).resolve()
     manifest = Path(args.manifest) if args.manifest else root / "val.jsonl"
@@ -259,9 +263,9 @@ def main(argv=None) -> int:
         output = Path(args.output)
     elif args.shard_count > 1:
         output = (Path(args.checkpoint) /
-                  f"eval.shard-{args.shard_index}-of-{args.shard_count}.json")
+                  f"eval.{tag}.shard-{args.shard_index}-of-{args.shard_count}.json")
     else:
-        output = Path(args.checkpoint) / "eval.json"
+        output = Path(args.checkpoint) / f"eval.{tag}.json"
     output.write_text(json.dumps({"summary": summary, "samples": results},
                                  indent=2, ensure_ascii=False), encoding="utf-8")
     log(f"wrote {output}")
