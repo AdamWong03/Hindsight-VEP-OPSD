@@ -91,6 +91,22 @@ peak_alloc 48.8 GiB / 80 GiB      retries 0, ooms 0
 
 decode 只跑到 HBM 峰值带宽的 ~40%，所以**时间基本由「步数 × 权重流」决定**，这也解释了为什么唯一的实质提速手段是减少步数或让每遍权重服务更多行。
 
+## 3b. 评测（必需，否则只有训练 CE 可看）
+
+```bash
+bash scripts/eval_eipd.sh --checkpoint <stage1 或 stage2 目录>
+bash scripts/eval_eipd.sh --checkpoint DIR --ablate zero      # Z := 0
+bash scripts/eval_eipd.sh --checkpoint DIR --ablate shuffle   # 换成别的样本的 Z
+bash scripts/eval_eipd.sh --checkpoint DIR --limit 200        # 先小批验证
+```
+
+推理只走部署路径 `(Past, Q) → Z → answer`，不含 Bridge、未来帧或 gold 前缀，答案贪心解码，
+输出 exact match 与 token F1 到 `<checkpoint>/eval.json`。
+
+**三个数必须一起看**：正常 / zero / shuffle。若后两者几乎不掉，说明答案不是从 latent 来的
+（Beyond Visual Memory 报告过的捷径），此时 CE 再低也不能当作 latent 有效的证据。
+训练 CE 会塌到 0.04（K=16、3 epoch 实测），单看它无法区分"记住答案模板"和"预测未来事件"。
+
 ## 4. 监控
 
 日志在 `logs/stage1-*.log`、`logs/stage2-*.log`，每步一行：
