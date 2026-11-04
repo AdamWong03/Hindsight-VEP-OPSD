@@ -1,5 +1,7 @@
 # Hindsight-VEP-OPSD
 
+当前工作：[VEP Visual-Gain Audit 全量 5K 冻结评测协议](docs/vep-visual-gain-audit.md)。先检查正确 Past、Q-only 与匹配置换视频的预测信息差异，保留 CDLSD v1 checkpoint 作对照，不改训练目标。
+
 CDLSD-VEP 实验记录：[200 / 400 步 checkpoint 初步诊断（2026-11-04）](results/cdlsd-vep-v1/2026-11-04-checkpoint-diagnostics/README.md)。包含逐条预测、latent 干预、实际配置和评测日志；仅覆盖验证清单前 100 条 Camera 样本，不是正式 benchmark 成绩。
 
 **Active method: EIPD (Evidence-Increment Predictive Distillation)** for video event prediction. The original Gold+Future OPSD baseline is retained for reproducibility but is no longer the default project workflow.
