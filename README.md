@@ -2,6 +2,8 @@
 
 当前工作：[VEP Visual-Gain Audit 全量 5K 冻结评测协议](docs/vep-visual-gain-audit.md)。先检查正确 Past、Q-only 与匹配置换视频的预测信息差异，保留 CDLSD v1 checkpoint 作对照，不改训练目标。
 
+最新：[接口与语义测量的补充结果](docs/vep-visual-gain-followup.md)。确认当前数据为单 Past 帧；接口 API 验证通过，但自动语义评审的真实样本一致性不足，未发布全量语义正确率。
+
 CDLSD-VEP 实验记录：[200 / 400 步 checkpoint 初步诊断（2026-11-04）](results/cdlsd-vep-v1/2026-11-04-checkpoint-diagnostics/README.md)。包含逐条预测、latent 干预、实际配置和评测日志；仅覆盖验证清单前 100 条 Camera 样本，不是正式 benchmark 成绩。
 
 **Active method: EIPD (Evidence-Increment Predictive Distillation)** for video event prediction. The original Gold+Future OPSD baseline is retained for reproducibility but is no longer the default project workflow.
