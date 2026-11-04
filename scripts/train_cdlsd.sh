@@ -22,7 +22,7 @@ PROCESSOR="${PROCESSOR:-/data1/wyd/models/Qwen3-VL-4B-Instruct}"
 DATA_ROOT="${DATA_ROOT:-/data1/wyd/datasets/EIPD-Data-v1}"
 MANIFEST="${MANIFEST:-${DATA_ROOT}/train.jsonl}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-OUTPUT="${OUTPUT:-/data1/wyd/experiments/cdlsd_vep_v1_${MODE}_${STAMP}}"
+OUTPUT="${OUTPUT:-/data2/wyd/experiments/cdlsd_vep_v1_${MODE}_${STAMP}}"
 LOG="${LOG:-${OUTPUT}/train.log}"
 
 [[ -x "${PYTHON}" ]] || { echo "missing python: ${PYTHON}" >&2; exit 2; }

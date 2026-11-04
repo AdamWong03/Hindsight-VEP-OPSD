@@ -5,20 +5,31 @@ import argparse
 import json
 import random
 import sys
+from datetime import datetime
 from pathlib import Path
+
+
+def log(message: str) -> None:
+    print(f"[{datetime.now().isoformat(timespec='seconds')}] [cdlsd-eval] {message}",
+          flush=True)
+
+
+if __name__ == "__main__":
+    log("importing PyTorch and Transformers")
 
 import torch
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
 from .cdlsd_data import CDLSDDataset, LATENT_TOKEN
 from .cdlsd_latent import decode_answer, latent_rollout, sample_answer
-from .eipd_eval import normalise, token_f1
+from .eval_metrics import normalise, token_f1
 from .eipd_latent import LatentProjector
 
 
 def load_checkpoint(base_model: str, checkpoint: str, device, max_pixels: int):
     from peft import PeftModel
 
+    log(f"loading processor from {checkpoint}")
     processor = AutoProcessor.from_pretrained(
         checkpoint if (Path(checkpoint) / "preprocessor_config.json").is_file() else base_model,
         min_pixels=2 * 32 * 32,
@@ -28,8 +39,10 @@ def load_checkpoint(base_model: str, checkpoint: str, device, max_pixels: int):
     tokenizer.add_special_tokens({"additional_special_tokens": [LATENT_TOKEN]})
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    log(f"loading local base weights from {base_model}")
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         base_model, dtype=torch.bfloat16, attn_implementation="sdpa")
+    log("base weights loaded; loading adapter and latent projector")
     model.resize_token_embeddings(len(tokenizer))
     model = PeftModel.from_pretrained(model, checkpoint)
     payload = torch.load(
@@ -37,10 +50,12 @@ def load_checkpoint(base_model: str, checkpoint: str, device, max_pixels: int):
     projector = LatentProjector(model.config.text_config.hidden_size)
     projector.load_state_dict(payload["projector"])
     model.add_module("cdlsd_latent_projector", projector)
+    log(f"moving model to {device}")
     model.to(device).eval()
     projector.to(dtype=model.get_input_embeddings().weight.dtype)
     for parameter in model.parameters():
         parameter.requires_grad_(False)
+    log("model ready")
     return model, projector, processor
 
 
@@ -65,8 +80,8 @@ def evaluate_suite(model, projector, processor, dataset, indices, *, checkpoint:
             "short": states.short.detach().cpu(),
             "long": states.long.detach().cpu(),
         })
-        if (offset + 1) % 25 == 0:
-            print(f"[cdlsd-eval] latent cache {offset + 1}/{len(indices)}", flush=True)
+        if offset == 0 or (offset + 1) % 5 == 0:
+            log(f"latent cache {offset + 1}/{len(indices)}")
 
     donor_offsets = list(range(len(cache)))
     random.Random(seed).shuffle(donor_offsets)
@@ -104,13 +119,14 @@ def evaluate_suite(model, projector, processor, dataset, indices, *, checkpoint:
                 "exact": float(normalise(prediction) == normalise(row["answer"])),
                 "token_f1": token_f1(prediction, row["answer"]),
             })
-            if (offset + 1) % 25 == 0:
-                print(f"[cdlsd-eval] {condition} {offset + 1}/{len(cache)}", flush=True)
+            if offset == 0 or (offset + 1) % 5 == 0:
+                log(f"{condition} {offset + 1}/{len(cache)}")
         samples_by_condition[condition] = results
         summaries[condition] = {
             "exact_match": sum(row["exact"] for row in results) / len(results),
             "token_f1": sum(row["token_f1"] for row in results) / len(results),
         }
+        log(f"{condition} summary: {json.dumps(summaries[condition])}")
 
     question_echo = sum(
         token_f1(entry["row"]["question"], entry["row"]["answer"])
@@ -158,12 +174,14 @@ def main(argv=None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
 
+    log("dependencies imported; reading validation manifest")
     root = Path(args.data_root).resolve()
     manifest = args.manifest or str(root / "val.jsonl")
     dataset = CDLSDDataset(str(root), manifest)
     indices = list(range(len(dataset)))
     if args.limit:
         indices = indices[:args.limit]
+    log(f"evaluating {len(indices)} samples from {manifest}")
     donors = indices.copy()
     random.Random(args.seed).shuffle(donors)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
