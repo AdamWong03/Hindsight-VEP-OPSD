@@ -45,6 +45,102 @@ def load_checkpoint(base_model: str, checkpoint: str, device, max_pixels: int):
 
 
 @torch.no_grad()
+def evaluate_suite(model, projector, processor, dataset, indices, *, checkpoint: str,
+                   device, max_new_tokens: int, seed: int) -> dict:
+    """Evaluate short/long/zero/shuffle after one model load and one latent pass.
+
+    Cached states stay on CPU between phases.  Besides eliminating three redundant
+    8B checkpoint loads, this guarantees every condition sees byte-identical latent
+    states and the same validation examples.
+    """
+    cache = []
+    for offset, index in enumerate(indices):
+        item = dataset[index]
+        row = item["row"]
+        states = latent_rollout(
+            model, projector, processor, item["observed"], row["question"],
+            short_steps=4, long_steps=8, checkpoint_prefill=False)
+        cache.append({
+            "row": row,
+            "short": states.short.detach().cpu(),
+            "long": states.long.detach().cpu(),
+        })
+        if (offset + 1) % 25 == 0:
+            print(f"[cdlsd-eval] latent cache {offset + 1}/{len(indices)}", flush=True)
+
+    donor_offsets = list(range(len(cache)))
+    random.Random(seed).shuffle(donor_offsets)
+    if len(cache) > 1:
+        for offset, donor in enumerate(donor_offsets):
+            if donor == offset:
+                swap = (offset + 1) % len(cache)
+                donor_offsets[offset], donor_offsets[swap] = (
+                    donor_offsets[swap], donor_offsets[offset])
+
+    conditions = ("short", "long", "zero", "shuffle")
+    samples_by_condition = {}
+    summaries = {}
+    for condition in conditions:
+        results = []
+        for offset, entry in enumerate(cache):
+            row = entry["row"]
+            if condition == "short":
+                selected = entry["short"]
+            elif condition == "long":
+                selected = entry["long"]
+            elif condition == "zero":
+                selected = torch.zeros_like(entry["short"])
+            else:
+                selected = cache[donor_offsets[offset]]["short"]
+            generated = sample_answer(
+                model, processor.tokenizer, row["question"], selected.to(device),
+                max_new_tokens=max_new_tokens, temperature=0.0, top_p=1.0)
+            prediction = decode_answer(processor.tokenizer, generated.cpu())
+            results.append({
+                "sample_id": row.get("sample_id"),
+                "question": row["question"],
+                "gold": row["answer"],
+                "prediction": prediction,
+                "exact": float(normalise(prediction) == normalise(row["answer"])),
+                "token_f1": token_f1(prediction, row["answer"]),
+            })
+            if (offset + 1) % 25 == 0:
+                print(f"[cdlsd-eval] {condition} {offset + 1}/{len(cache)}", flush=True)
+        samples_by_condition[condition] = results
+        summaries[condition] = {
+            "exact_match": sum(row["exact"] for row in results) / len(results),
+            "token_f1": sum(row["token_f1"] for row in results) / len(results),
+        }
+
+    question_echo = sum(
+        token_f1(entry["row"]["question"], entry["row"]["answer"])
+        for entry in cache
+    ) / len(cache)
+    comparisons = {}
+    short = samples_by_condition["short"]
+    for condition in ("long", "zero", "shuffle"):
+        other = samples_by_condition[condition]
+        comparisons[f"short_vs_{condition}"] = {
+            "identical_predictions": sum(
+                left["prediction"] == right["prediction"]
+                for left, right in zip(short, other)
+            ),
+            "short_minus_other_f1": sum(
+                left["token_f1"] - right["token_f1"]
+                for left, right in zip(short, other)
+            ) / len(short),
+        }
+    return {
+        "checkpoint": checkpoint,
+        "samples": len(cache),
+        "summaries": summaries,
+        "question_echo_f1": question_echo,
+        "comparisons": comparisons,
+        "conditions": samples_by_condition,
+    }
+
+
+@torch.no_grad()
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-model", required=True)
@@ -52,6 +148,8 @@ def main(argv=None) -> int:
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--suite", action="store_true",
+                        help="one-load short/long/zero/shuffle diagnostic suite")
     parser.add_argument("--depth", choices=("short", "long"), default="short")
     parser.add_argument("--ablate", choices=("none", "zero", "shuffle"), default="none")
     parser.add_argument("--limit", type=int, default=0)
@@ -71,6 +169,19 @@ def main(argv=None) -> int:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model, projector, processor = load_checkpoint(
         args.base_model, args.checkpoint, device, args.image_max_pixels)
+
+    if args.suite:
+        payload = evaluate_suite(
+            model, projector, processor, dataset, indices,
+            checkpoint=args.checkpoint, device=device,
+            max_new_tokens=args.max_new_tokens, seed=args.seed)
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, indent=2, ensure_ascii=False),
+                          encoding="utf-8")
+        print(json.dumps({key: value for key, value in payload.items()
+                          if key != "conditions"}, indent=2), flush=True)
+        return 0
 
     results = []
     for offset, index in enumerate(indices):
