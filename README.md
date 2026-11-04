@@ -1,5 +1,7 @@
 # Hindsight-VEP-OPSD
 
+CDLSD-VEP 实验记录：[200 / 400 步 checkpoint 初步诊断（2026-11-04）](results/cdlsd-vep-v1/2026-11-04-checkpoint-diagnostics/README.md)。包含逐条预测、latent 干预、实际配置和评测日志；仅覆盖验证清单前 100 条 Camera 样本，不是正式 benchmark 成绩。
+
 **Active method: EIPD (Evidence-Increment Predictive Distillation)** for video event prediction. The original Gold+Future OPSD baseline is retained for reproducibility but is no longer the default project workflow.
 
 EIPD starts from the original Qwen3-VL checkpoint and distills answer predictions using a frozen same-initialization teacher under two conditions: Past only and Past plus **one genuinely intermediate Bridge frame**. The branches replay the student's sampled discrete reasoning and teacher-force the Gold Answer using ordinary text tokens. Bridge and Gold are training signals only; Student rollout and inference receive Past frames and the question only. Future-L1 weights and continuous latent generation are not used.

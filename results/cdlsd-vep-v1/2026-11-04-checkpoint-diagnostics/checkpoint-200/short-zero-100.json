@@ -1,0 +1,812 @@
+{
+  "summary": {
+    "checkpoint": "/data1/wyd/experiments/cdlsd_vep_v1_formal_50k_s42_20261104-010215/checkpoint-200",
+    "depth": "short",
+    "ablate": "zero",
+    "samples": 100,
+    "exact_match": 0.0,
+    "token_f1": 0.5850311815473773
+  },
+  "samples": [
+    {
+      "sample_id": "ab6b8773f66b10b921117890",
+      "question": "How should the camera move to emphasize the serene winter scenery and the motion of the car as it drives along the road in the snowy landscape?",
+      "gold": "The camera should move smoothly, panning across the landscape to capture the changing light and shadows of the sunset, then shift to follow the car driving along the road, maintaining a consistent distance and angle to emphasize the serene winter scenery and the car's motion.",
+      "prediction": "The camera should pan to the right to follow the car's movement and then zoom in to capture the car's details and the snowy landscape.",
+      "exact": 0.0,
+      "token_f1": 0.48571428571428565
+    },
+    {
+      "sample_id": "e4d77f5c8453109637127a33",
+      "question": "How should the camera move to capture the transition from a cloudy to a sunny day, and then to a sunset, as the cityscape changes throughout the day?",
+      "gold": "The camera should start with a wide shot to capture the dramatic atmosphere, then slowly pan to reveal the clearer cityscape and ocean, tilt downward to focus on the sunset, and finally pan slowly to capture the vibrant city lights at night.",
+      "prediction": "The camera should pan from left to right to capture the transition from a cloudy to a sunny day, then to a sunset, as the cityscape changes throughout the day.",
+      "exact": 0.0,
+      "token_f1": 0.4444444444444444
+    },
+    {
+      "sample_id": "04d84c86ad5f82a71ea1a214",
+      "question": "Based on , how does the camera emphasize the urban environment during its journey along the street?",
+      "gold": "The camera emphasizes the urban environment by maintaining a steady forward movement, capturing the continuous flow of city life, and highlighting the dynamic changes in the scene as it approaches different intersections and traffic lights.",
+      "prediction": "The camera emphasizes the urban environment by panning across the street to capture the bustling activity and the diverse array of vehicles and pedestrians.",
+      "exact": 0.0,
+      "token_f1": 0.44067796610169496
+    },
+    {
+      "sample_id": "3ccea32663754e4cf3b3a8a5",
+      "question": "Based on the person's initial position in , how should the camera move to include the car in the background, highlighting its design, as the person gestures and talks in the following scene?",
+      "gold": "The camera should slightly pan to the left to include the green car in the background, emphasizing its design as the person gestures and talks.",
+      "prediction": "The camera should pan to the right to include the car in the background, highlighting its design.",
+      "exact": 0.0,
+      "token_f1": 0.7142857142857143
+    },
+    {
+      "sample_id": "2762bca432ffac31748c0e6b",
+      "question": "How should the camera move, frame, or compose the shot to emphasize a specific element, convey meaning, or evoke a particular emotion, as the person prepares the fishing equipment on the kayak in a tranquil environment?",
+      "gold": "The camera should pan slightly to capture the serene environment with water and docks in the background, then shift focus to the person's hand adjusting the fishing rod on the kayak to emphasize the tranquil setting and the preparation involved in setting up for fishing.",
+      "prediction": "The camera should pan to the right to reveal the person preparing the fishing equipment on the kayak, emphasizing the tranquil environment and the person's actions.",
+      "exact": 0.0,
+      "token_f1": 0.5352112676056338
+    },
+    {
+      "sample_id": "85bc081fd7f9db63fc1d0389",
+      "question": "How should the camera move to emphasize the man's actions on the boat, especially as he adjusts his sunglasses and bends down?",
+      "gold": "The camera should move to a lower angle to follow the man's bending motion, emphasizing his actions and creating a dynamic visual effect against the scenic backdrop.",
+      "prediction": "The camera should move closer to the man to emphasize his actions and capture the details of his movements.",
+      "exact": 0.0,
+      "token_f1": 0.47826086956521735
+    },
+    {
+      "sample_id": "5193c6676d8ea7032a3a4837",
+      "question": "How should the camera move to emphasize the car's design features while showcasing its surroundings?",
+      "gold": "The camera should move closer to the car to emphasize its design features while maintaining the context of its surroundings.",
+      "prediction": "The camera should pan around the car to highlight its design features and then zoom in on specific details to emphasize its craftsmanship.",
+      "exact": 0.0,
+      "token_f1": 0.5581395348837209
+    },
+    {
+      "sample_id": "14889e6e171747173ab88c9f",
+      "question": "How does the camera emphasize the vehicle's movement along the road?",
+      "gold": "The camera emphasizes the vehicle's movement by maintaining a steady focus from the front and then shifting to a dynamic angle that highlights the car's motion and design details as it drives forward.",
+      "prediction": "The camera emphasizes the vehicle's movement along the road by following it closely, capturing its motion and the changing scenery.",
+      "exact": 0.0,
+      "token_f1": 0.4528301886792453
+    },
+    {
+      "sample_id": "5ac181917b1074ec4184c679",
+      "question": "How should the camera move to emphasize the scenic beauty of the valley and convey the sense of movement from the train's perspective in ?",
+      "gold": "The camera should pan smoothly across the landscape to emphasize the scenic beauty and convey the sense of movement from the train's perspective.",
+      "prediction": "The camera should pan across the valley to emphasize its scenic beauty and convey the sense of movement from the train's perspective.",
+      "exact": 0.0,
+      "token_f1": 0.888888888888889
+    },
+    {
+      "sample_id": "352415fd5bfdeb9d592e5a12",
+      "question": "How should the camera move to capture the interaction between the driver and the dog while emphasizing the scenic drive at sunset?",
+      "gold": "The camera should move closer to capture the interaction between the driver and the dog, then adjust to provide a broader view of the scenic surroundings to emphasize the beauty of the sunset and the road.",
+      "prediction": "The camera should pan to the right to follow the dog as it runs towards the car, then zoom in to capture the dog's face and the driver's reaction, emphasizing the scenic drive at sunset.",
+      "exact": 0.0,
+      "token_f1": 0.5070422535211268
+    },
+    {
+      "sample_id": "491e311b252c8bc959f3cc3d",
+      "question": "How should the camera move to emphasize the scenic transition from the forest to the lakeside, capturing the change in environment as the person walks through?",
+      "gold": "The camera should follow the person closely through the forest, maintaining a steady focus on them, and then transition to a wider shot at the lakeside to capture the scenic change in the environment.",
+      "prediction": "The camera should pan to the right to follow the person walking through the forest and then transition to the lakeside, capturing the scenic change in environment.",
+      "exact": 0.0,
+      "token_f1": 0.7213114754098361
+    },
+    {
+      "sample_id": "92a0870135d6e363b4038076",
+      "question": "How should the camera move to maintain a consistent side view of the black convertible car as it drives along the highway, ensuring the car remains centered in the frame despite its motion?",
+      "gold": "The camera should slightly pan to the right to maintain a consistent side view of the black convertible car as it drives along the highway, ensuring the car remains centered in the frame.",
+      "prediction": "The camera should pan smoothly to the right to maintain a consistent side view of the black convertible car as it drives along the highway.",
+      "exact": 0.0,
+      "token_f1": 0.8275862068965517
+    },
+    {
+      "sample_id": "124e45a006cc5388acedaef7",
+      "question": "How should the camera move to capture the full joy and interaction between the woman and the mascot, especially as the scene transitions from the embrace to her clapping and smiling?",
+      "gold": "The camera should move from a medium shot capturing the initial embrace, to a closer perspective, and then pan slightly to maintain focus on the interaction while capturing the lively atmosphere, before shifting to a side angle to highlight the woman's clapping and smiling.",
+      "prediction": "The camera should pan to the right to follow the woman as she claps and smiles, capturing her joyful interaction with the mascot.",
+      "exact": 0.0,
+      "token_f1": 0.3582089552238806
+    },
+    {
+      "sample_id": "24588265f6f0ede978761f31",
+      "question": "How should the camera move to effectively highlight the undulating surface and the blue patches on the terrain in ?",
+      "gold": "The camera should smoothly fly over the terrain, maintaining a steady flight path to highlight the undulating surface and the blue patches from various angles.",
+      "prediction": "The camera should move to highlight the undulating surface and the blue patches on the terrain.",
+      "exact": 0.0,
+      "token_f1": 0.6829268292682927
+    },
+    {
+      "sample_id": "34b880af0dd1f1c4ab99a8d3",
+      "question": "How should the camera move to emphasize the reflective surfaces and craftsmanship of the motorcycle's rear design as showcased in ?",
+      "gold": "The camera should pan downward to reveal the surrounding environment and then tilt upward to showcase the symmetry and craftsmanship of the taillights and chrome accents, before shifting to a side view to capture the full design of the motorcycle's rear.",
+      "prediction": "The camera should move to highlight the reflective surfaces and craftsmanship of the motorcycle's rear design, focusing on the intricate details and the interplay of light and shadow.",
+      "exact": 0.0,
+      "token_f1": 0.49275362318840576
+    },
+    {
+      "sample_id": "00a9992232cff5ea3cf64332",
+      "question": "What is the purpose of the camera movement in the video, and how does it emphasize the variety of spray paint cans and tools on the table in ?",
+      "gold": "The camera movement emphasizes the variety of spray paint cans and tools by panning from left to right, revealing additional items and creating a sense of exploration.",
+      "prediction": "The camera movement is to emphasize the variety of spray paint cans and tools on the table.",
+      "exact": 0.0,
+      "token_f1": 0.5454545454545455
+    },
+    {
+      "sample_id": "82a9a21c4cdcafe2326db7ab",
+      "question": "How should the camera move to emphasize the journey and highlight the outdoor setting as the person walks along the path in ?",
+      "gold": "The camera should pan to the right to reveal the path and the surrounding environment, then shift slightly upwards to show more of the surroundings, including additional greenery and a street sign, to emphasize the journey and highlight the outdoor setting.",
+      "prediction": "The camera should follow the person closely, maintaining a steady focus on their movements and the surrounding environment to emphasize the journey and highlight the outdoor setting.",
+      "exact": 0.0,
+      "token_f1": 0.5294117647058824
+    },
+    {
+      "sample_id": "6478b8f45af151be4826860a",
+      "question": "How should the camera move to emphasize the cyclists' journey through the countryside and capture the dynamic movement of the scene?",
+      "gold": "The camera should move dynamically, tracking the cyclists from behind with a consistent distance and angle to emphasize their journey and the lush green environment, enhancing the sense of motion and immersion.",
+      "prediction": "The camera should pan to follow the cyclists as they ride through the countryside, capturing the dynamic movement and the changing scenery.",
+      "exact": 0.0,
+      "token_f1": 0.3333333333333333
+    },
+    {
+      "sample_id": "735285727a704a936af02d16",
+      "question": "How should the camera move to emphasize the pilot's control and the dynamic changes in the landscape as the aircraft maneuvers through the sky?",
+      "gold": "The camera should maintain a consistent first-person perspective from inside the cockpit, capturing the pilot's steady focus and the evolving landscape to emphasize the pilot's control and the dynamic nature of the flight.",
+      "prediction": "The camera should pan and tilt to follow the aircraft's movements, emphasizing the pilot's control and the dynamic changes in the landscape.",
+      "exact": 0.0,
+      "token_f1": 0.5090909090909091
+    },
+    {
+      "sample_id": "3a696a2a8592dda0506cbc83",
+      "question": "How should the camera move to emphasize the transition from a narrow, tree-lined path to a more open area with buildings in the distance, as seen in the video?",
+      "gold": "The camera should gradually widen its field of view to capture the transition from a narrow, tree-lined path to a more open area with buildings in the distance, emphasizing the changing landscape and the journey through the countryside.",
+      "prediction": "The camera should move forward along the path to emphasize the transition from a narrow, tree-lined path to a more open area with buildings in the distance.",
+      "exact": 0.0,
+      "token_f1": 0.6769230769230768
+    },
+    {
+      "sample_id": "3cdc5d6113e6a3342ab4bb4c",
+      "question": "How should the camera move to emphasize the car's sleek design and the scenic ocean sunset in the background?",
+      "gold": "The camera should slowly pan from the rear to the front of the car to emphasize its sleek design and integrate the scenic ocean sunset into the composition.",
+      "prediction": "The camera should pan to the right to emphasize the car's sleek design and the scenic ocean sunset in the background.",
+      "exact": 0.0,
+      "token_f1": 0.6938775510204083
+    },
+    {
+      "sample_id": "599d9b4266908da3279bdc10",
+      "question": "How should the camera move to capture the sense of speed and adventure as the jet ski moves through the water, starting with the man in the cap in ?",
+      "gold": "The camera should move dynamically to follow the jet ski closely, capturing the splashes and waves to emphasize the sense of speed and adventure.",
+      "prediction": "The camera should pan to the right to follow the jet ski as it moves through the water, capturing the sense of speed and adventure.",
+      "exact": 0.0,
+      "token_f1": 0.6938775510204083
+    },
+    {
+      "sample_id": "07a22b171c479865107ed6c5",
+      "question": "How should the camera move to emphasize the actor's presence and the grandeur of the stage environment, as seen in ?",
+      "gold": "The camera should zoom out from a close-up shot of the actor to reveal the full stage setup, emphasizing the actor's presence and the grandeur of the stage environment.",
+      "prediction": "The camera should pan to the right to reveal more of the stage and the actor's presence, emphasizing the grandeur of the environment.",
+      "exact": 0.0,
+      "token_f1": 0.7307692307692308
+    },
+    {
+      "sample_id": "605898035d24b7c67322d71f",
+      "question": "How should the camera move to emphasize the man's gesture of raising his arms against the lush green background?",
+      "gold": "The camera should move to capture the man from different angles, such as a side angle, to emphasize his gesture against the lush green background and add depth to the scene.",
+      "prediction": "The camera should pan to the right to follow the man's movement and emphasize his gesture.",
+      "exact": 0.0,
+      "token_f1": 0.4680851063829787
+    },
+    {
+      "sample_id": "b5ec421fa879c3f57289b388",
+      "question": "How should the camera move to emphasize the structure of the ferry and the control tower, highlighting the setting without any significant action?",
+      "gold": "The camera should pan down to reveal the ferry with cars parked below, then remain static to focus on the structure of the ferry and the control tower, highlighting the setting without any significant action.",
+      "prediction": "The camera should pan to the right to emphasize the structure of the ferry and the control tower, highlighting the setting without any significant action.",
+      "exact": 0.0,
+      "token_f1": 0.7666666666666667
+    },
+    {
+      "sample_id": "a6f7fa115857f489238fd324",
+      "question": "How should the camera move to emphasize the serene garden environment shown in ?",
+      "gold": "The camera should smoothly pan along the pathway to reveal more of the garden, emphasizing the serene environment by showcasing the diverse vegetation and tranquil setup.",
+      "prediction": "The camera should pan to the right to reveal more of the garden and the surrounding environment.",
+      "exact": 0.0,
+      "token_f1": 0.6511627906976744
+    },
+    {
+      "sample_id": "01c6d2c4ae6064cbce3d0800",
+      "question": "How should the camera move or frame the shot to emphasize the intricate details of the elephant statue and the surrounding snowy environment in ?",
+      "gold": "The camera should pan around the statue to capture various angles and perspectives, emphasizing the intricate details of the sculpture and the snowy environment.",
+      "prediction": "The camera should pan around the elephant statue to capture its intricate details and the surrounding snowy environment, emphasizing the contrast between the statue and the natural setting.",
+      "exact": 0.0,
+      "token_f1": 0.7307692307692307
+    },
+    {
+      "sample_id": "21c99eb1b2147e12d15933ea",
+      "question": "How should the camera move to emphasize the architectural details of the stone wall while gradually revealing the scenic view of the city with prominent church spires and surrounding greenery?",
+      "gold": "The camera should pan smoothly along the stone wall, gradually revealing the scenic view of the city with prominent church spires and surrounding greenery, to emphasize both the architectural details and the landscape.",
+      "prediction": "The camera should pan to the right to reveal the scenic view of the city with prominent church spires and surrounding greenery.",
+      "exact": 0.0,
+      "token_f1": 0.6909090909090909
+    },
+    {
+      "sample_id": "e96197e62fea302306fbc824",
+      "question": "How should the camera move to capture the interplay of light and water, highlighting the dynamic changes in the fountain display and the structures it illuminates?",
+      "gold": "The camera should move by starting with a wide shot to establish the context, then panning to the right to capture the full scope of the display, and finally transitioning to a closer view to highlight the architectural details and the reflections of the lights on the water.",
+      "prediction": "The camera should pan across the fountain to capture the interplay of light and water, highlighting the dynamic changes in the fountain display and the structures it illuminates.",
+      "exact": 0.0,
+      "token_f1": 0.39473684210526316
+    },
+    {
+      "sample_id": "421e023314d448951da6d3d3",
+      "question": "How should the camera move to emphasize the car's design details, such as the model name and logo, as seen in ?",
+      "gold": "The camera should slowly pan from left to right to emphasize the car's design details, such as the model name and logo.",
+      "prediction": "The camera should move to the right to emphasize the car's design details, such as the model name and logo.",
+      "exact": 0.0,
+      "token_f1": 0.8571428571428572
+    },
+    {
+      "sample_id": "7ff5dcd03f772f36592af049",
+      "question": "How should the camera move to emphasize the woman's expressions and gestures as she interacts with the plush toy and the posters in the background?",
+      "gold": "The camera should move slightly to capture the woman's gestures and expressions more clearly, emphasizing her interaction with the plush toy and the posters.",
+      "prediction": "The camera should pan to the right to follow the woman's movements and then zoom in to capture her expressions and gestures as she interacts with the plush toy and the posters.",
+      "exact": 0.0,
+      "token_f1": 0.6428571428571429
+    },
+    {
+      "sample_id": "31bbb2fafd2f91678d190a54",
+      "question": "How should the camera move to emphasize the action and combat dynamics between the characters and enemies in the game environment, as seen in ?",
+      "gold": "The camera should zoom in on specific enemies and shift focus to close-up shots of combat to emphasize action and dynamics.",
+      "prediction": "The camera should move dynamically to follow the characters' movements and actions, emphasizing the combat dynamics and interactions with enemies.",
+      "exact": 0.0,
+      "token_f1": 0.4390243902439024
+    },
+    {
+      "sample_id": "0185b315cbea6caafecef2b2",
+      "question": "How should the camera move to emphasize the dramatic entrance of the wrestlers and capture the contrast between their outfits and the stage lighting in ?",
+      "gold": "The camera should follow the wrestler's movement, capturing the dynamic lighting and smoke effects, and then focus on the contrast between the two wrestlers to emphasize the dramatic entrance.",
+      "prediction": "The camera should pan to the right to follow the wrestlers as they enter the ring, emphasizing their dramatic entrance and capturing the contrast between their outfits and the stage lighting.",
+      "exact": 0.0,
+      "token_f1": 0.6333333333333333
+    },
+    {
+      "sample_id": "77888fe99bf5a96eae9cadae",
+      "question": "How should the camera move to emphasize the car's handling and design as it navigates through the snowy curves?",
+      "gold": "The camera should maintain a low-angle, steady tracking shot from the side to emphasize the car's handling and sleek design as it navigates through the snowy curves.",
+      "prediction": "The camera should pan and tilt to follow the car's movement, emphasizing its handling and design as it navigates through the snowy curves.",
+      "exact": 0.0,
+      "token_f1": 0.6399999999999999
+    },
+    {
+      "sample_id": "8c4374abf8e3d86c8ad0cff3",
+      "question": "How should the camera move to emphasize the girl's interaction with the food and create a dynamic view as she eats?",
+      "gold": "The camera should zoom in slightly and pan to follow the girl's hands and the food she is holding to emphasize her interaction with the meal and create a dynamic view.",
+      "prediction": "The camera should pan to the right to follow the girl as she eats, emphasizing her interaction with the food and creating a dynamic view.",
+      "exact": 0.0,
+      "token_f1": 0.6785714285714285
+    },
+    {
+      "sample_id": "d37ba4505801b357cfc8f738",
+      "question": "How should the camera move, frame, or compose the shot to emphasize the vastness of the hallway and the solitary figure of the man walking through it, creating a sense of scale and perspective?",
+      "gold": "The camera should start with a wide shot to establish the setting, then gradually zoom in to emphasize the man's solitary figure, and finally shift back to a wide shot to highlight the vastness of the hallway, creating a sense of scale and perspective.",
+      "prediction": "The camera should pan to the right to follow the man's movement, emphasizing the vastness of the hallway and the solitary figure.",
+      "exact": 0.0,
+      "token_f1": 0.4848484848484849
+    },
+    {
+      "sample_id": "79fcf1829e228de3570d7b06",
+      "question": "How should the camera frame or compose the shot to emphasize the exchange of money between individuals while conveying the theme of international transactions?",
+      "gold": "The camera should maintain a steady close-up on the hands and money to emphasize the transaction, while dynamically introducing flags of different countries around the scene to convey the theme of international exchange.",
+      "prediction": "The camera should frame the shot to focus on the hands exchanging money, emphasizing the transaction while maintaining a neutral and professional setting.",
+      "exact": 0.0,
+      "token_f1": 0.5
+    },
+    {
+      "sample_id": "0421601adf3d80968d5e2599",
+      "question": "How should the camera move to emphasize the shift in lighting mode on the car's dashboard display, as seen in ?",
+      "gold": "The camera should zoom in slightly and focus on the dashboard display to emphasize the shift in lighting mode from red to blue.",
+      "prediction": "The camera should move to focus on the car's dashboard display to emphasize the shift in lighting mode.",
+      "exact": 0.0,
+      "token_f1": 0.7804878048780488
+    },
+    {
+      "sample_id": "3b3d2ec7c777b03061c122e1",
+      "question": "How should the camera move to emphasize the details of the car's interior design and features, as seen in the transition from the driver's seat area to the door panel?",
+      "gold": "The camera should smoothly pan from the driver's seat area to the door panel, emphasizing the design and features through close-up shots and highlighting the stitching details and contrasting color scheme.",
+      "prediction": "The camera should move from the driver's seat area to the door panel to emphasize the details of the car's interior design and features.",
+      "exact": 0.0,
+      "token_f1": 0.6545454545454547
+    },
+    {
+      "sample_id": "2e5c9eaf00b0c191a98a27a1",
+      "question": "How should the camera move to emphasize the dynamic performance and the atmosphere of the street performance in ?",
+      "gold": "The camera should maintain a steady, medium-distance shot to capture the dynamic movements and coordination of the musicians, while also highlighting the lively street atmosphere and engagement of the performers.",
+      "prediction": "The camera should move to capture the dynamic performance and the atmosphere of the street performance, focusing on the performers and the crowd.",
+      "exact": 0.0,
+      "token_f1": 0.6037735849056605
+    },
+    {
+      "sample_id": "2c9a3c71757e171ba1281cfd",
+      "question": "How should the camera move to emphasize the interaction between the driver and the environment as the car approaches the area with the crowd and the white car?",
+      "gold": "The camera should transition from a close-up view of the driver to a wider shot that captures the interaction with the crowd and the white car, emphasizing the dynamic movement and environment.",
+      "prediction": "The camera should pan to the right to follow the car as it moves towards the crowd and the white car, emphasizing the interaction between the driver and the environment.",
+      "exact": 0.0,
+      "token_f1": 0.5806451612903225
+    },
+    {
+      "sample_id": "5011e4c7d30eff229774dc6e",
+      "question": "What camera technique is used to emphasize the hot air balloon's ascent in the video, and how does it highlight the balloon's journey against the backdrop of the cloudy sky and flying drones?",
+      "gold": "The camera uses a combination of a static wide shot, a higher perspective, and a close-up to emphasize the hot air balloon's ascent. This technique captures the balloon's journey from preparation to flight, highlighting its interaction with the cloudy sky and flying drones.",
+      "prediction": "The camera technique used is a tracking shot, following the hot air balloon as it ascends and highlighting its journey against the backdrop of the cloudy sky and flying drones.",
+      "exact": 0.0,
+      "token_f1": 0.547945205479452
+    },
+    {
+      "sample_id": "5a7d402fe893ccacc8decef9",
+      "question": "How should the camera move to emphasize the playful interaction between the cat and the toy in the initial scene, and then shift to capture the cat's relaxed demeanor in the close-up shot?",
+      "gold": "The camera should start with a low-angle shot to capture the playful interaction, then transition to a close-up to emphasize the cat's relaxed demeanor.",
+      "prediction": "The camera should start with a wide shot to capture the playful interaction between the cat and the toy, then transition to a close-up shot to emphasize the cat's relaxed demeanor.",
+      "exact": 0.0,
+      "token_f1": 0.8363636363636364
+    },
+    {
+      "sample_id": "8f04a160304ce2d2b9b99e5d",
+      "question": "How should the camera move to emphasize the subject and highlight the background compression effect in the initial frame?",
+      "gold": "The camera should zoom in closer to the subject to emphasize the subject and highlight the background compression effect.",
+      "prediction": "The camera should move closer to the subject to emphasize their presence and highlight the background compression effect.",
+      "exact": 0.0,
+      "token_f1": 0.8108108108108109
+    },
+    {
+      "sample_id": "cf43480eed1eaec06125e33a",
+      "question": "How should the camera move to emphasize the animated gestures of the man on the right while maintaining the focus on the static background and the text at the bottom of the frame?",
+      "gold": "The camera should remain stationary to emphasize the animated gestures of the man on the right while keeping the static background and the text at the bottom of the frame in focus.",
+      "prediction": "The camera should pan slightly to the right to follow the man's gestures while keeping the static background and text in focus.",
+      "exact": 0.0,
+      "token_f1": 0.6296296296296297
+    },
+    {
+      "sample_id": "55227db2a9fc93792eabc098",
+      "question": "Based on , how should the camera move or frame the shot to emphasize the significance of the diplomatic interaction between the two men shaking hands in front of the podiums adorned with flags?",
+      "gold": "The camera should maintain a steady, wide shot to capture the full significance of the diplomatic interaction, emphasizing the formal setting and the presence of officials. As the scene transitions to the military setting, the camera should continue with a steady, wide shot to highlight the strategic placement of the missile launchers, reinforcing the connection between diplomacy and defense.",
+      "prediction": "The camera should pan to the right to capture the handshake and the flags, emphasizing the diplomatic interaction.",
+      "exact": 0.0,
+      "token_f1": 0.3636363636363637
+    },
+    {
+      "sample_id": "778aa150adb3b1888ad4f5fd",
+      "question": "How should the camera move or frame the shot to emphasize the details on the dresser and convey the sense of organization or disarray in the room, considering the clutter visible throughout?",
+      "gold": "The camera should move from a wide shot to a closer pan, then zoom in on the dresser and its contents, and finally capture a close-up of the drawers being opened to emphasize the details and convey the sense of disarray in the room.",
+      "prediction": "The camera should pan across the dresser to highlight the cluttered items and then zoom in on specific objects to emphasize the disarray.",
+      "exact": 0.0,
+      "token_f1": 0.5074626865671641
+    },
+    {
+      "sample_id": "6c2149ff76b1855418b4af02",
+      "question": "How should the camera move to emphasize the sense of speed and motion of the leading car as it drives down the road?",
+      "gold": "The camera should move closer to the leading car and slightly adjust its position to keep the car in the frame, using panning and zooming techniques to emphasize the sense of speed and motion.",
+      "prediction": "The camera should pan to the right to follow the leading car, emphasizing its speed and motion as it drives down the road.",
+      "exact": 0.0,
+      "token_f1": 0.4912280701754386
+    },
+    {
+      "sample_id": "ae38e28dd5fad06a5fd8d2a3",
+      "question": "How should the camera move to emphasize the motion of the dollar bills and the American flag amidst the backdrop of the cityscape?",
+      "gold": "The camera should zoom in and pan to follow the motion of the dollar bills and the American flag, emphasizing the dynamic interaction between money and the national symbol amidst the backdrop of the cityscape.",
+      "prediction": "The camera should pan to the right to follow the motion of the dollar bills and the American flag, emphasizing their movement against the cityscape.",
+      "exact": 0.0,
+      "token_f1": 0.6666666666666666
+    },
+    {
+      "sample_id": "06bc046d9b065831b44400b3",
+      "question": "How should the camera move to emphasize the unique cylindrical design of the house, starting with a detailed view of the entrance and gradually revealing the full structure and its surroundings?",
+      "gold": "The camera should start with a close-up of the entrance, then gradually zoom out and pan to reveal the entire cylindrical structure and its surroundings, highlighting the house's unique design and the picturesque rural setting.",
+      "prediction": "The camera should start with a close-up of the entrance, then pan out to reveal the full cylindrical structure and its surroundings, emphasizing the unique design and the natural environment.",
+      "exact": 0.0,
+      "token_f1": 0.8
+    },
+    {
+      "sample_id": "912db751879cd9a3a5bee75c",
+      "question": "How should the camera move to emphasize the texture and presentation of the dumplings in the pan?",
+      "gold": "The camera should slightly adjust its angle and zoom to capture different perspectives, moving from a close-up tilted angle to a more top-down view to emphasize the texture and presentation of the dumplings.",
+      "prediction": "The camera should move closer to the pan to emphasize the texture and presentation of the dumplings.",
+      "exact": 0.0,
+      "token_f1": 0.5199999999999999
+    },
+    {
+      "sample_id": "8b3bea295a93fcaca7db48ca",
+      "question": "How should the camera move to emphasize the sleek design and details of the red car in ?",
+      "gold": "The camera should move from a close-up of the rear end to a wider shot of the side of the car to emphasize its sleek design and details.",
+      "prediction": "The camera should pan around the car to highlight its sleek design and details.",
+      "exact": 0.0,
+      "token_f1": 0.5238095238095237
+    },
+    {
+      "sample_id": "48fd13255ec909f5f5c23b9b",
+      "question": "How should the camera move to emphasize the difference between the gold and silver medal pieces on the rotating pie chart?",
+      "gold": "The camera should maintain a steady focus on the rotating pie chart and slightly zoom in when the silver medal piece appears to emphasize the comparison between the gold and silver medal pieces.",
+      "prediction": "The camera should zoom in on the gold medal piece to emphasize its significance and then pan to the silver medal piece to highlight the difference.",
+      "exact": 0.0,
+      "token_f1": 0.576271186440678
+    },
+    {
+      "sample_id": "2c1c94df5944584c75cff39d",
+      "question": "What specific architectural feature or signage should the camera emphasize next to highlight the urban landscape and prominent signage in the Las Vegas street scene?",
+      "gold": "The camera should emphasize the large billboard with the iPhone advertisement to highlight its prominence within the urban landscape.",
+      "prediction": "The camera should emphasize the large, illuminated sign that reads 'Las Vegas' to highlight the urban landscape and prominent signage.",
+      "exact": 0.0,
+      "token_f1": 0.5641025641025641
+    },
+    {
+      "sample_id": "2338c803c5615de90920ec11",
+      "question": "How should the camera move, frame, or compose the shot to emphasize a specific element, convey meaning, or evoke a particular emotion, given the change in the screen's content from a suitcase to a 3M factory image?",
+      "gold": "The camera should remain static, maintaining a consistent framing to emphasize the speaker and the visual aids, ensuring the audience's attention is drawn to the changing content on the screen.",
+      "prediction": "The camera should pan to the right to reveal the 3M factory image, emphasizing the transition from the suitcase to the factory setting.",
+      "exact": 0.0,
+      "token_f1": 0.3773584905660377
+    },
+    {
+      "sample_id": "61c607431c7ef6d40b11c6e5",
+      "question": "How should the camera move to emphasize the interaction with the laptop screen and capture the collaborative environment in the background?",
+      "gold": "The camera should slightly shift to include more of the background, showing the collaborative environment, while maintaining focus on the man and the laptop screen.",
+      "prediction": "The camera should pan to the right to focus on the laptop screen and then zoom in to capture the collaborative environment in the background.",
+      "exact": 0.0,
+      "token_f1": 0.64
+    },
+    {
+      "sample_id": "76794243be0a1dac33dd0bad",
+      "question": "How should the camera move or frame the shot to emphasize the reporter's storytelling against the snowy backdrop?",
+      "gold": "The camera should remain static, focusing on the reporter to emphasize her storytelling, with the snowy backdrop providing context without distracting from her presence.",
+      "prediction": "The camera should pan to the right to follow the reporter's movement and maintain focus on the snowy landscape, emphasizing the storytelling against the backdrop.",
+      "exact": 0.0,
+      "token_f1": 0.4081632653061225
+    },
+    {
+      "sample_id": "8a491ff503c3687999cc519a",
+      "question": "How should the camera adjust its angle to keep the car in the frame as it navigates the turns on the winding road?",
+      "gold": "The camera should slightly adjust its angle to keep the car in the frame as it navigates the turns on the winding road.",
+      "prediction": "The camera should adjust its angle to follow the car's movement, ensuring it remains centered in the frame as the car navigates the turns.",
+      "exact": 0.0,
+      "token_f1": 0.7659574468085107
+    },
+    {
+      "sample_id": "54351118a910c148709271e6",
+      "question": "What camera technique is used to emphasize the transition from day to night in the cityscape, and how does it highlight the urban environment in the scene?",
+      "gold": "The video uses a combination of panning and zooming techniques to emphasize the transition from day to night and highlight the urban environment.",
+      "prediction": "The camera technique used is a slow pan across the cityscape, emphasizing the transition from day to night and highlighting the urban environment.",
+      "exact": 0.0,
+      "token_f1": 0.5217391304347826
+    },
+    {
+      "sample_id": "fa88db7961752775bee08d2f",
+      "question": "How should the camera move to emphasize the dynamic and playful interaction between the two characters in the kitchen, as the red character moves energetically around the green character?",
+      "gold": "The camera should follow the red character's movements closely, using dynamic motion such as a handheld or dolly shot, and emphasize the characters' exaggerated expressions and actions with close-up or low-angle shots.",
+      "prediction": "The camera should pan to follow the red character's movements and zoom in to capture the playful interaction between the two characters.",
+      "exact": 0.0,
+      "token_f1": 0.4074074074074074
+    },
+    {
+      "sample_id": "c912976e457d5142c2192532",
+      "question": "How should the camera move to emphasize the natural beauty of the garden and its layout, as it transitions from the wooden structure to the wider view of the garden?",
+      "gold": "The camera should move with a smooth panning shot, starting with a close-up of the wooden structure and then gradually transitioning to a wider view of the garden, highlighting the natural beauty and layout of the yard.",
+      "prediction": "The camera should pan to the right to reveal the wider view of the garden, emphasizing its natural beauty and layout.",
+      "exact": 0.0,
+      "token_f1": 0.5172413793103449
+    },
+    {
+      "sample_id": "ef9d3fdeeda10c6790ec5112",
+      "question": "How should the camera move to emphasize the confined space and interactions among the travelers in the elevator?",
+      "gold": "The camera should move closer to capture the confined space and interactions among the travelers, using close-up shots and dynamic angles to emphasize the intimate atmosphere.",
+      "prediction": "The camera should move to emphasize the confined space and interactions among the travelers in the elevator.",
+      "exact": 0.0,
+      "token_f1": 0.6976744186046512
+    },
+    {
+      "sample_id": "573e1dae7643d7148e270af6",
+      "question": "How should the camera move to emphasize the cyclist's dynamic motion against the forest backdrop in ?",
+      "gold": "The camera should move dynamically to follow the cyclist's trajectory, capturing different perspectives to emphasize the vibrant colors and fluid motion against the forest backdrop.",
+      "prediction": "The camera should pan to follow the cyclist's movement, emphasizing the dynamic motion against the forest backdrop.",
+      "exact": 0.0,
+      "token_f1": 0.6190476190476191
+    },
+    {
+      "sample_id": "996f6ebf81ecfee3fd1d64e8",
+      "question": "How should the camera move to emphasize the decorative pattern and color contrast of the ribbons in ?",
+      "gold": "The camera should slowly zoom in to emphasize the decorative pattern and color contrast of the ribbons.",
+      "prediction": "The camera should move to the right to emphasize the decorative pattern and color contrast of the ribbons.",
+      "exact": 0.0,
+      "token_f1": 0.7999999999999999
+    },
+    {
+      "sample_id": "8958c4cc72d74c872eeaa91d",
+      "question": "How should the camera move to emphasize the child on the right who is gesturing and talking, while still capturing the interaction between the two children with butterfly face paint?",
+      "gold": "The camera should maintain a static position to emphasize the child on the right who is gesturing and talking, while still capturing the interaction between the two children with butterfly face paint.",
+      "prediction": "The camera should pan slightly to the right to focus on the child on the right who is gesturing and talking, while still capturing the interaction between the two children with butterfly face paint.",
+      "exact": 0.0,
+      "token_f1": 0.8181818181818182
+    },
+    {
+      "sample_id": "2fdac7920d4f293d27acd0cc",
+      "question": "How should the camera move to emphasize the zoom feature on the smartphone screen in ?",
+      "gold": "The camera should move to capture the transition from a wider view to a closer perspective, emphasizing the zoom effect on the smartphone screen.",
+      "prediction": "The camera should move closer to the smartphone screen to emphasize the zoom feature.",
+      "exact": 0.0,
+      "token_f1": 0.631578947368421
+    },
+    {
+      "sample_id": "1f288d535cce256e960c76f2",
+      "question": "How should the camera move to emphasize the sleek design and sporty appearance of the red car in the lineup?",
+      "gold": "The camera should zoom in on the red car to emphasize its sleek design and sporty appearance.",
+      "prediction": "The camera should pan to the right to emphasize the sleek design and sporty appearance of the red car.",
+      "exact": 0.0,
+      "token_f1": 0.7222222222222222
+    },
+    {
+      "sample_id": "791f38dad21251d51c25b2e3",
+      "question": "How should the camera move, frame, or compose the shot to emphasize the Barbie doll's interaction with her surroundings in the pink room?",
+      "gold": "The camera should zoom in on the vanity table and mirror to emphasize the Barbie doll's interaction with her surroundings, highlighting her engagement with the mirror and the smaller doll's actions.",
+      "prediction": "The camera should pan to the right to reveal more of the pink room and the Barbie doll's interaction with her surroundings.",
+      "exact": 0.0,
+      "token_f1": 0.5283018867924528
+    },
+    {
+      "sample_id": "c6d11366da03350162042e61",
+      "question": "How should the camera move to emphasize the scale and design of the Minecraft structure in ?",
+      "gold": "The camera should pan out smoothly from a detailed section view to a wide shot to emphasize the scale and organized design of the Minecraft structure.",
+      "prediction": "The camera should move around the structure to highlight its scale and design, providing a comprehensive view of the building.",
+      "exact": 0.0,
+      "token_f1": 0.5652173913043479
+    },
+    {
+      "sample_id": "65883ba70bb1cd41e10df640",
+      "question": "How should the camera move to emphasize the architectural details and ongoing construction work in the site seen in ?",
+      "gold": "The camera should slowly pan from left to right, gradually revealing the construction site and architectural details, to emphasize the complexity and scope of the project.",
+      "prediction": "The camera should move to the right to reveal more of the construction site and the surrounding area.",
+      "exact": 0.0,
+      "token_f1": 0.5909090909090908
+    },
+    {
+      "sample_id": "ad0ac67152769c4741bdc85d",
+      "question": "What specific camera technique is being used to capture the car scene, and how does it enhance the visual storytelling on set?",
+      "gold": "The camera technique being used is a stabilizing rig to ensure smooth and steady shots, enhancing the visual storytelling by capturing the car's movement clearly and integrating seamlessly into the collaborative filming environment.",
+      "prediction": "The camera is using a tracking shot to follow the car as it moves through the scene, enhancing the visual storytelling by maintaining focus on the car and its surroundings.",
+      "exact": 0.0,
+      "token_f1": 0.4126984126984127
+    },
+    {
+      "sample_id": "593f04aa0c77d6a251b72d26",
+      "question": "How should the camera move to emphasize the interaction between the rider and the horse as they move across the arena?",
+      "gold": "The camera should subtly adjust its angle to keep the rider and horse centered as they move, maintaining a steady distance to emphasize their interaction and coordination.",
+      "prediction": "The camera should pan to follow the rider and horse as they move across the arena, maintaining a steady focus on their interaction and movements.",
+      "exact": 0.0,
+      "token_f1": 0.6538461538461539
+    },
+    {
+      "sample_id": "991648d2739c7f54565b8c23",
+      "question": "How should the camera move to emphasize the hanging decorations and the neatly arranged bed in the room?",
+      "gold": "The camera should move by panning down from the ceiling decorations to the neatly arranged bed to emphasize the room's decor.",
+      "prediction": "The camera should pan to the right to emphasize the hanging decorations and then move to the left to highlight the neatly arranged bed.",
+      "exact": 0.0,
+      "token_f1": 0.6222222222222222
+    },
+    {
+      "sample_id": "af56054f61f199f61760e0b1",
+      "question": "How should the camera move to emphasize the layout and amenities of the pool area, specifically highlighting the transition from the water fountain to the shuffleboard court?",
+      "gold": "The camera should pan from the water fountain to the shuffleboard court to emphasize the layout and amenities of the pool area.",
+      "prediction": "The camera should pan to the right to reveal the shuffleboard court and then zoom in on the shuffleboard table to highlight its features.",
+      "exact": 0.0,
+      "token_f1": 0.5217391304347826
+    },
+    {
+      "sample_id": "02d3bb782d6598a959e1e2cf",
+      "question": "How should the camera move to emphasize the intricate mechanical components of the tractor, as it progresses from a wide shot to a closer view?",
+      "gold": "The camera should move forward to provide a closer view of the tractor's mechanical components, emphasizing the intricate design and structure.",
+      "prediction": "The camera should move closer to the tractor to emphasize the intricate mechanical components.",
+      "exact": 0.0,
+      "token_f1": 0.6285714285714286
+    },
+    {
+      "sample_id": "8f64e7ac49c329f4c131a4f5",
+      "question": "How should the camera move to emphasize the detailed and vibrant design of the phone case as it is rotated?",
+      "gold": "The camera should make slight movements to follow the rotation of the phone case, ensuring that the vibrant and intricate design remains in focus while capturing different angles.",
+      "prediction": "The camera should pan around the phone case to highlight its detailed and vibrant design.",
+      "exact": 0.0,
+      "token_f1": 0.46511627906976744
+    },
+    {
+      "sample_id": "2e346de5765d240af4f543da",
+      "question": "How should the camera move to emphasize the vibrant colors and dynamic movement within the aquarium?",
+      "gold": "The camera should maintain a steady focus on the vibrant green plants while capturing the dynamic movement of bubbles rising through the water to emphasize the lively and visually appealing environment of the aquarium.",
+      "prediction": "The camera should pan across the aquarium to capture the vibrant colors and dynamic movement of the fish.",
+      "exact": 0.0,
+      "token_f1": 0.4999999999999999
+    },
+    {
+      "sample_id": "5a585075de3e848ac28e0640",
+      "question": "Based on , how does the camera composition emphasize specific elements within the car's dashboard layout?",
+      "gold": "The camera should move from a close-up of the dashboard, focusing on the infotainment screen and air vents, to a smooth pan towards the steering wheel, showcasing the interior design and controls to emphasize the car's modern features and cohesive layout.",
+      "prediction": "The camera composition emphasizes the car's dashboard layout by focusing on the central console and steering wheel, highlighting the car's modern design and technological features.",
+      "exact": 0.0,
+      "token_f1": 0.5151515151515151
+    },
+    {
+      "sample_id": "5fa0b4d75040a0586586a8d8",
+      "question": "How should the camera move to emphasize the luxurious design of the rear seats after showcasing the front interior?",
+      "gold": "The camera should transition from the front interior to the rear seats, highlighting the blue leather upholstery and stitching details, then pan slightly to the right to provide a wider view of the central console and infotainment system, and finally shift focus back to the rear seats to emphasize the stitching details and overall luxurious design.",
+      "prediction": "The camera should pan to the rear seats to emphasize their luxurious design.",
+      "exact": 0.0,
+      "token_f1": 0.34782608695652173
+    },
+    {
+      "sample_id": "adb2267f5445f1158ec3bb72",
+      "question": "How should the camera move to emphasize the spaciousness and modern design of the living room as the man gestures and speaks?",
+      "gold": "The camera should move closer to the man as he gestures and speaks, while maintaining a view of the large windows to emphasize the spaciousness and modern design of the living room.",
+      "prediction": "The camera should pan to the right to reveal more of the living room, emphasizing the spaciousness and modern design.",
+      "exact": 0.0,
+      "token_f1": 0.5769230769230769
+    },
+    {
+      "sample_id": "898eae1567d3a54e1301e49a",
+      "question": "How should the camera move to emphasize the character's movement through the glowing forest environment in ?",
+      "gold": "The camera should smoothly pan across the glowing forest environment, following the character's movement to emphasize the atmospheric lighting and vibrant colors, thereby enhancing the immersive experience.",
+      "prediction": "The camera should follow the character closely, maintaining a steady focus on their movements and the glowing forest environment.",
+      "exact": 0.0,
+      "token_f1": 0.391304347826087
+    },
+    {
+      "sample_id": "b8434f64212a009cb5ae906a",
+      "question": "How should the camera move or frame the shot to emphasize the interaction between the child in the blue bear costume and the child in the pink dress with yellow accents, so that the expressive intent of their conversation becomes clear?",
+      "gold": "The camera should slowly zoom in on the child in the blue bear costume and the child in the pink dress with yellow accents to emphasize their interaction and make the conversation more engaging for the audience.",
+      "prediction": "The camera should pan to the right to follow the child in the blue bear costume as they move towards the child in the pink dress with yellow accents, emphasizing their interaction and conversation.",
+      "exact": 0.0,
+      "token_f1": 0.7042253521126761
+    },
+    {
+      "sample_id": "a2b8233662297260268652d3",
+      "question": "How should the camera move to emphasize the transformation and development of the brick wall structure from different angles, as seen in the video?",
+      "gold": "The camera should pan to the right to capture different angles and perspectives of the construction site, emphasizing the transformation and development of the brick wall structure over time.",
+      "prediction": "The camera should move to capture the brick wall structure from different angles, emphasizing its transformation and development.",
+      "exact": 0.0,
+      "token_f1": 0.6382978723404256
+    },
+    {
+      "sample_id": "0e321e048b4eb99d1a665683",
+      "question": "How should the camera move to emphasize the detailed graphics and character portraits on the handheld gaming device's screen in ?",
+      "gold": "The camera should zoom in on the screen to capture the detailed graphics and character portraits, emphasizing the game's features.",
+      "prediction": "The camera should move to the right to emphasize the detailed graphics and character portraits on the handheld gaming device's screen.",
+      "exact": 0.0,
+      "token_f1": 0.6829268292682926
+    },
+    {
+      "sample_id": "844a0269ff413324ca71d2c2",
+      "question": "How should the camera move to emphasize the planning and animation process in the video, as shown in the split-screen format?",
+      "gold": "The camera should maintain a split-screen format, with subtle zooms on specific characters or panels to emphasize the detailed planning and animation process, highlighting the transition from storyboard sketches to the final animated scene.",
+      "prediction": "The camera should pan to the right to reveal more of the animation process and the tools being used.",
+      "exact": 0.0,
+      "token_f1": 0.4150943396226416
+    },
+    {
+      "sample_id": "acdf43e7d3129660c346bcff",
+      "question": "How should the camera move to emphasize the vastness of the landscape and the person standing on the cliff edge, as seen in ?",
+      "gold": "The camera should move from a close-up shot to a wide aerial view, then pan across the landscape to emphasize the vastness and natural beauty, highlighting the person standing on the cliff edge.",
+      "prediction": "The camera should pan to the right to reveal more of the landscape and the person standing on the cliff edge.",
+      "exact": 0.0,
+      "token_f1": 0.6296296296296297
+    },
+    {
+      "sample_id": "c3adcf3982bedadf1bc4202d",
+      "question": "How should the camera move to emphasize the vibrant colors and organized presentation of the dishes in the buffet setup, as seen in ?",
+      "gold": "The camera should slowly pan to the right to reveal more salad options, then zoom out slightly to provide a wider view of the buffet setup, emphasizing the vibrant colors and organized presentation of the dishes.",
+      "prediction": "The camera should pan across the buffet table to emphasize the vibrant colors and organized presentation of the dishes.",
+      "exact": 0.0,
+      "token_f1": 0.5818181818181818
+    },
+    {
+      "sample_id": "06532890bcc131be576df9c1",
+      "question": "How should the camera move to emphasize the beauty and texture of the plants in the field, as seen in ?",
+      "gold": "The camera should slowly pan across the field to reveal the surrounding landscape and then zoom in on individual plants to highlight their textures and details.",
+      "prediction": "The camera should move slowly and steadily to capture the intricate details and vibrant colors of the plants, emphasizing their beauty and texture.",
+      "exact": 0.0,
+      "token_f1": 0.4897959183673469
+    },
+    {
+      "sample_id": "0ae58c226e39792e42864286",
+      "question": "How should the camera move to emphasize the performer's interaction with the audience during the live performance?",
+      "gold": "The camera should start with a wide shot to establish the context and then zoom in to focus on the performer's actions, enhancing the sense of engagement and connection with the audience.",
+      "prediction": "The camera should pan to the right to follow the performer's movement and then zoom in to capture the performer's interaction with the audience.",
+      "exact": 0.0,
+      "token_f1": 0.5714285714285715
+    },
+    {
+      "sample_id": "1857189f1d9b0f1162e16ce3",
+      "question": "What technique does the camera use to emphasize the bowlers' movements and the trajectory of the balls in ?",
+      "gold": "The camera uses subtle adjustments and consistent framing to emphasize the bowlers' movements and the trajectory of the balls.",
+      "prediction": "The camera uses a combination of close-up shots and dynamic angles to emphasize the bowlers' movements and the trajectory of the balls.",
+      "exact": 0.0,
+      "token_f1": 0.7317073170731707
+    },
+    {
+      "sample_id": "ff2d8b7f927d4d70f656a2c0",
+      "question": "What specific aspect of the antennas is being emphasized by the camera movement in ?",
+      "gold": "The camera movement emphasizes the intricate setup and positioning of the antennas on the rooftop, showcasing how they are interconnected and situated within the environment.",
+      "prediction": "The camera movement emphasizes the detailed structure and design of the antennas.",
+      "exact": 0.0,
+      "token_f1": 0.48648648648648657
+    },
+    {
+      "sample_id": "3a9d3192faa0d2ec30a44ce7",
+      "question": "How should the camera move to emphasize the vastness and tranquility of the rocky coastline and its surrounding landscape, as seen in ?",
+      "gold": "The camera should gradually zoom out and pan to reveal a wider view of the landscape, emphasizing the vastness and tranquility of the area.",
+      "prediction": "The camera should pan slowly across the rocky coastline to emphasize the vastness and tranquility of the landscape.",
+      "exact": 0.0,
+      "token_f1": 0.619047619047619
+    },
+    {
+      "sample_id": "a5ad4810b51598c5aabbafcb",
+      "question": "Based on , how does the camera composition emphasize the orange car's wheel design before revealing the wider context of the event?",
+      "gold": "The camera composition emphasizes the orange car's wheel design by starting with a close-up shot, then slowly pans to reveal the wider context of the event, highlighting the car's features and the surrounding crowd.",
+      "prediction": "The camera composition emphasizes the orange car's wheel design by focusing on the wheel and then panning out to reveal the wider context of the event.",
+      "exact": 0.0,
+      "token_f1": 0.7
+    },
+    {
+      "sample_id": "3c8fcafc7e02cc3b7c636c2b",
+      "question": "Based on , how should the camera move to emphasize the reflective surface and branding of the compact mirror as the hand rotates it?",
+      "gold": "The camera should move to capture different angles of the compact mirror, focusing on the reflective surface, branding, hinge, and text on the base, and zoom in to show the product information on the back.",
+      "prediction": "The camera should pan around the compact mirror to emphasize its reflective surface and branding as the hand rotates it.",
+      "exact": 0.0,
+      "token_f1": 0.43636363636363634
+    },
+    {
+      "sample_id": "c2443de134454ee624174f41",
+      "question": "How should the camera move to emphasize the design and features of the white Ford F-150 in its environment?",
+      "gold": "The camera should start with a wide shot to establish the vehicle's setting, then zoom in on the front grille to highlight the branding, pan to the side to focus on the model badge, and finally move to a close-up of the wheel to emphasize the tire and rim details.",
+      "prediction": "The camera should pan around the truck to highlight its design and features, then zoom in on the truck's details to emphasize its robust and modern appearance.",
+      "exact": 0.0,
+      "token_f1": 0.4415584415584416
+    },
+    {
+      "sample_id": "ea5a755c8ff2af4100bcc65d",
+      "question": "How should the camera move to showcase the design of the car's dashboard, focusing on the details and angles?",
+      "gold": "The camera should smoothly pan from right to left to showcase the design of the car's dashboard, focusing on the details and angles.",
+      "prediction": "The camera should pan across the dashboard to highlight its design and features.",
+      "exact": 0.0,
+      "token_f1": 0.5
+    },
+    {
+      "sample_id": "1f5bf2e98c5be43b80cb89c3",
+      "question": "How should the camera move to emphasize the architectural features of the bridge and its relationship with the city skyline in ?",
+      "gold": "The camera should gradually move closer to the bridge to emphasize its architectural features and its relationship with the city skyline.",
+      "prediction": "The camera should pan across the bridge to highlight its architectural features and then zoom in on specific elements to emphasize its design and integration with the city skyline.",
+      "exact": 0.0,
+      "token_f1": 0.68
+    },
+    {
+      "sample_id": "08ef26fd0626a05907e61e12",
+      "question": "How should the camera move or frame the shot to emphasize the interaction between the soldier and the young man, highlighting the tension in the scene as the encounter progresses through the window?",
+      "gold": "The camera should maintain a fixed perspective through the window frame to emphasize the interaction between the soldier and the young man, using the window as a framing device to highlight the tension and dynamics of the encounter.",
+      "prediction": "The camera should pan to the right to follow the soldier's movement and then zoom in on the young man to emphasize the tension and the soldier's actions.",
+      "exact": 0.0,
+      "token_f1": 0.48484848484848486
+    },
+    {
+      "sample_id": "67ec5f74f79a8736aa7b13c4",
+      "question": "How should the camera move to emphasize the player's progression through the industrial area, highlighting the transition from the fenced enclosure to the path leading to the storage tanks?",
+      "gold": "The camera should smoothly pan to the right as the player exits the fenced enclosure and track their movement towards the storage tanks, maintaining a consistent view of the player's hands and the surrounding environment to emphasize the transition and progression through the industrial area.",
+      "prediction": "The camera should pan to the right to follow the player's movement, emphasizing the transition from the fenced enclosure to the path leading to the storage tanks.",
+      "exact": 0.0,
+      "token_f1": 0.5555555555555555
+    },
+    {
+      "sample_id": "74b491befbf6ea85292e726d",
+      "question": "How should the camera move to emphasize the circular vignette effect while showcasing the beauty of the orange orchard in ?",
+      "gold": "The camera should move closer and rotate slightly to provide different perspectives of the orchard while maintaining the circular vignette effect.",
+      "prediction": "The camera should pan around the orange orchard to emphasize the circular vignette effect and showcase the beauty of the orchard.",
+      "exact": 0.0,
+      "token_f1": 0.5714285714285714
+    }
+  ]
+}
